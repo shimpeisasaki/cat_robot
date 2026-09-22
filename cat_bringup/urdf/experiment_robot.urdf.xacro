@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<robot name="experiment_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Measurements are expressed from the drive-axle midpoint at ground level. -->
+  <xacro:property name="wheel_radius" value="0.050"/>
+  <xacro:property name="wheel_width" value="0.040"/>
+  <xacro:property name="track_width" value="0.208"/>
+
+  <material name="body_blue"><color rgba="0.10 0.35 0.80 1.0"/></material>
+  <material name="wheel_black"><color rgba="0.04 0.04 0.04 1.0"/></material>
+  <material name="antenna_white"><color rgba="0.90 0.90 0.90 1.0"/></material>
+  <material name="safety_red"><color rgba="1.0 0.10 0.10 0.18"/></material>
+
+  <link name="base_link"/>
+
+  <link name="chassis_link">
+    <visual>
+      <!-- Body thickness 0.140; underside at z=0.050, top at z=0.190. -->
+      <origin xyz="-0.1325 0 0.120" rpy="0 0 0"/>
+      <geometry><box size="0.375 0.300 0.140"/></geometry>
+      <material name="body_blue"/>
+    </visual>
+  </link>
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/><child link="chassis_link"/>
+  </joint>
+
+  <xacro:macro name="drive_wheel" params="side y">
+    <link name="${side}_wheel_link">
+      <visual>
+        <!-- The wheel link origin is its axle center. -->
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="wheel_black"/>
+      </visual>
+    </link>
+    <joint name="${side}_wheel_joint" type="fixed">
+      <parent link="base_link"/><child link="${side}_wheel_link"/>
+      <origin xyz="0 ${y} ${wheel_radius}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:drive_wheel side="left" y="${track_width/2}"/>
+  <xacro:drive_wheel side="right" y="${-track_width/2}"/>
+
+  <!-- Swivel-axis reference at the measured mounting height.
+       Fixed joints show the nominal trailing pose; this is not a caster simulation. -->
+  <link name="caster_link"/>
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/><child link="caster_link"/>
+    <origin xyz="-0.345 0 0.125" rpy="0 0 0"/>
+  </joint>
+  <link name="caster_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.050" length="0.025"/></geometry>
+      <material name="wheel_black"/>
+    </visual>
+  </link>
+  <joint name="caster_wheel_joint" type="fixed">
+    <parent link="caster_link"/><child link="caster_wheel_link"/>
+    <!-- 35 mm trail; wheel axle at ground height + radius (50 mm). -->
+    <origin xyz="-0.035 0 -0.075" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Provisional Nav2 footprint: +0.075/-0.460 x +/-0.170 m. -->
+  <link name="safety_footprint_link">
+    <visual>
+      <origin xyz="-0.1925 0 0.006" rpy="0 0 0"/>
+      <geometry><box size="0.535 0.340 0.012"/></geometry>
+      <material name="safety_red"/>
+    </visual>
+  </link>
+  <joint name="safety_footprint_joint" type="fixed">
+    <parent link="base_link"/><child link="safety_footprint_link"/>
+  </joint>
+
+  <!-- RPLIDAR S1 scan origin (rotating laser axis), not its bottom mounting face.
+       Measured from base_link: 8 mm forward, centered, 192 mm above ground. -->
+  <link name="laser"/>
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/><child link="laser"/>
+    <!-- The scanner's +X direction faces the rear of the vehicle. -->
+    <origin xyz="0.008 0 0.192" rpy="0 0 ${pi}"/>
+  </joint>
+
+  <!-- Camera mounting reference is now on the robot centerline (y=0).
+       Previous longitudinal position and mounting height are retained. -->
+  <xacro:include filename="$(find zed_description)/urdf/zed_macro.urdf.xacro"/>
+  <xacro:zed_camera name="zed" model="zedm" enable_gnss="false">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:zed_camera>
+  <joint name="zed_mount_joint" type="fixed">
+    <parent link="base_link"/><child link="zed_camera_link"/>
+    <origin xyz="-0.270 0 0.54675" rpy="0 0 0"/>
+  </joint>
+
+  <!-- GNSS link origin is the user-provided antenna reference point. -->
+  <link name="gnss_antenna_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <!-- Ellipsoid: diameter 0.160, height 0.050; reference at its center. -->
+      <geometry><mesh filename="package://cat_bringup/meshes/antenna.stl"/></geometry>
+      <material name="antenna_white"/>
+    </visual>
+  </link>
+  <joint name="gnss_antenna_joint" type="fixed">
+    <parent link="base_link"/><child link="gnss_antenna_link"/>
+    <origin xyz="-0.310 0 0.610" rpy="0 0 0"/>
+  </joint>
+</robot>

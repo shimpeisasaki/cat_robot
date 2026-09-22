@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""Forward fresh, transformable gyro samples; report wheel-only fallback.
+
+No old samples are replayed. EKF keeps receiving wheel velocities during loss.
+"""
+import math
+import time
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
+from rclpy.time import Time
+from sensor_msgs.msg import Imu
+from std_msgs.msg import String
+from tf2_ros import Buffer, TransformListener
+
+
+class ImuGuard(Node):
+    def __init__(self):
+        super().__init__('imu_guard')
+        self.timeout = self.declare_parameter('imu_timeout', 0.5).value
+        self.floor = self.declare_parameter('gyro_variance_floor', 0.0004).value
+        # The base controller limits yaw rate to 1.2 rad/s.  A larger limit
+        # leaves normal vehicle motion intact while rejecting a disconnected,
+        # uncalibrated, or otherwise implausible IMU sample.
+        self.max_gyro_magnitude = self.declare_parameter(
+            'max_gyro_magnitude', 3.0).value
+        self.last_receive = None
+        self.last_stamp = None
+        self.state = None
+        self.last_rejection = 'no IMU sample received'
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
+        self.output = self.create_publisher(Imu, '/imu/ekf', 10)
+        self.status = self.create_publisher(String, '/localization/imu_status',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.create_subscription(Imu, '/zed/zed_node/imu/data', self.receive,
+                                 qos_profile_sensor_data)
+        self.create_timer(0.1, self.report)
+
+    def receive(self, msg):
+        stamp = Time.from_msg(msg.header.stamp)
+        age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
+        gyro = msg.angular_velocity
+        if not -0.1 <= age <= self.timeout or not msg.header.frame_id:
+            self.last_rejection = 'stale IMU timestamp or missing frame ID'
+            return
+        if self.last_stamp is not None and stamp.nanoseconds <= self.last_stamp:
+            self.last_rejection = 'non-increasing IMU timestamp'
+            return
+        if not all(math.isfinite(v) for v in (gyro.x, gyro.y, gyro.z)):
+            self.last_rejection = 'non-finite gyro value'
+            return
+        gyro_magnitude = math.sqrt(gyro.x * gyro.x + gyro.y * gyro.y + gyro.z * gyro.z)
+        if gyro_magnitude > self.max_gyro_magnitude:
+            self.last_rejection = (
+                f'gyro magnitude {gyro_magnitude:.3f} rad/s exceeds '
+                f'{self.max_gyro_magnitude:.3f} rad/s')
+            return
+        cov = msg.angular_velocity_covariance
+        if cov[0] < 0 or not all(math.isfinite(v) for v in cov):
+            self.last_rejection = 'invalid gyro covariance'
+            return
+        if not self.buffer.can_transform('base_link', msg.header.frame_id, stamp):
+            self.last_rejection = 'missing base_link to IMU transform'
+            return
+        # Conservative isotropic covariance, in (rad/s)^2. Avoid treating
+        # zero or tiny SDK covariance as perfect gyro accuracy.
+        variance = max(self.floor, cov[0], cov[4], cov[8])
+        msg.angular_velocity_covariance = [variance, 0., 0., 0., variance, 0., 0., 0., variance]
+        msg.orientation_covariance[0] = -1.0
+        msg.linear_acceleration_covariance[0] = -1.0
+        self.output.publish(msg)
+        self.last_stamp = stamp.nanoseconds
+        self.last_receive = time.monotonic()
+        self.last_rejection = ''
+
+    def report(self):
+        active = (self.last_receive is not None and
+                  time.monotonic() - self.last_receive <= self.timeout)
+        state = 'wheel_imu' if active else 'wheel_only'
+        if state != self.state:
+            self.status.publish(String(data=state))
+            if active:
+                self.get_logger().info('IMU available: wheel + gyro fusion resumed')
+            else:
+                self.get_logger().warning(
+                    f'IMU rejected/unavailable ({self.last_rejection}): wheel-only EKF')
+            self.state = state
+
+
+def main():
+    rclpy.init()
+    node = ImuGuard()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()
+
+
+if __name__ == '__main__':
+    main()

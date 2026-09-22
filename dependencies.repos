@@ -1,0 +1,15 @@
+# Import into ros2_ws/src, NOT inside cat_robot.
+# ZED messages and description are resolved by rosdep on ROS 2 Humble.
+repositories:
+  sllidar_ros2:
+    type: git
+    url: https://github.com/Slamtec/sllidar_ros2.git
+    version: 34300099fadfc772965962dec837bf436706188f
+  zed-ros2-wrapper:
+    type: git
+    url: https://github.com/shimpeisasaki/zed-ros2-wrapper.git
+    version: 32448b386d550a8f85f3bf0cc316f373d500a73a
+  ublox_dgnss:
+    type: git
+    url: https://github.com/shimpeisasaki/ublox_dgnss.git
+    version: abd2cab5ce9268cf3c1acbf27a4037997c4508b3

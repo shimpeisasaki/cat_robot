@@ -1,0 +1,359 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 70
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Wheel odometry1/Shape1
+        - /ZED registered cloud1
+      Splitter Ratio: 0.5
+    Tree Height: 499
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 0.10000000149011612
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Ground grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: base_link
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        caster_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        caster_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gnss_antenna_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        laser:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        safety_footprint_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        zed_camera_center:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        zed_camera_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        zed_left_camera_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        zed_left_camera_frame_optical:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        zed_right_camera_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        zed_right_camera_frame_optical:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: Measured robot
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_link:
+          Value: true
+        caster_link:
+          Value: true
+        caster_wheel_link:
+          Value: true
+        chassis_link:
+          Value: true
+        gnss_antenna_link:
+          Value: true
+        laser:
+          Value: true
+        left_wheel_link:
+          Value: true
+        right_wheel_link:
+          Value: true
+        safety_footprint_link:
+          Value: true
+        zed_camera_center:
+          Value: true
+        zed_camera_link:
+          Value: true
+        zed_imu_link:
+          Value: true
+        zed_left_camera_frame:
+          Value: true
+        zed_left_camera_frame_optical:
+          Value: true
+        zed_right_camera_frame:
+          Value: true
+        zed_right_camera_frame_optical:
+          Value: true
+      Marker Scale: 0.11999999731779099
+      Name: TF frames
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        base_link:
+          caster_link:
+            caster_wheel_link:
+              {}
+          chassis_link:
+            {}
+          gnss_antenna_link:
+            {}
+          laser:
+            {}
+          left_wheel_link:
+            {}
+          right_wheel_link:
+            {}
+          safety_footprint_link:
+            {}
+          zed_camera_link:
+            zed_camera_center:
+              zed_left_camera_frame:
+                zed_imu_link:
+                  {}
+                zed_left_camera_frame_optical:
+                  {}
+              zed_right_camera_frame:
+                zed_right_camera_frame_optical:
+                  {}
+      Update Interval: 0
+      Value: true
+    - Angle Tolerance: 0.009999999776482582
+      Class: rviz_default_plugins/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: false
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 50
+      Name: Wheel odometry
+      Position Tolerance: 0.009999999776482582
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 25; 0
+        Head Length: 0.30000001192092896
+        Head Radius: 0.10000000149011612
+        Shaft Length: 1
+        Shaft Radius: 0.05000000074505806
+        Value: Arrow
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odom
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: ZED registered cloud
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /zed/zed_node/point_cloud/cloud_registered
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /zed/zed_node/rgb/color/rect/image
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 35; 35; 35
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+    - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.06853891909122467
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.8864948749542236
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0.05331850051879883
+        Y: 0.12170493602752686
+        Z: 0.07556962966918945
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.4850001037120819
+      Target Frame: base_link
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 3.0600006580352783
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1403
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001cb00000521fc0200000003fb000000100044006900730070006c006100790073010000003d00000276000000c900fffffffb0000000a0056006900650077007301000002b900000199000000a400fffffffb0000000a0049006d0061006700650100000458000001060000002800ffffff0000082f0000052100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Views:
+    collapsed: false
+  Width: 2560
+  X: 0
+  Y: 0

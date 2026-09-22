@@ -1,0 +1,50 @@
+/**:
+  ros__parameters:
+    # Low-compute profile for wheel odometry + calibrated gyro fusion and VLM input.
+    # ZED Mini VGA is 672x376 per eye; use its lowest native 15 fps mode.
+    general:
+      # Fail a missing/disconnected camera promptly so zed_sensors.launch.py
+      # can respawn a clean wrapper after USB re-enumeration.
+      camera_timeout_sec: 3
+      camera_max_reconnect: 2
+      grab_resolution: 'VGA'
+      grab_frame_rate: 15
+      pub_resolution: 'NATIVE'
+      pub_frame_rate: 15.0
+      grab_compute_capping_fps: 0.0
+    video:
+      publish_rgb: true
+      publish_left_right: false
+      publish_raw: false
+      publish_gray: false
+      publish_stereo: false
+      enable_24bit_output: true
+    depth:
+      # Disables stereo depth, depth images, and colored point clouds.
+      depth_mode: 'NONE'
+      publish_depth_map: false
+      publish_depth_info: false
+      publish_point_cloud: false
+      publish_depth_confidence: false
+      publish_disparity: false
+    sensors:
+      # Use SDK bias-corrected gyro from data; EKF ignores orientation/acceleration.
+      publish_imu: true
+      publish_imu_raw: false
+      publish_cam_imu_transf: false
+      publish_mag: false
+      publish_baro: false
+      publish_temp: false
+      sensors_pub_rate: 100.0
+    pos_tracking:
+      # No ZED VIO/SLAM: wheel velocity + gyro are fused externally by EKF.
+      pos_tracking_enabled: false
+      imu_fusion: false
+      publish_odom_pose: false
+      publish_pose_cov: false
+      publish_tf: false
+      publish_map_tf: false
+      area_memory: false
+      reset_odom_with_loop_closure: false
+    gnss_fusion:
+      gnss_fusion_enabled: false

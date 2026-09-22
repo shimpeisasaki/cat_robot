@@ -1,0 +1,4 @@
+# RPLIDAR S1 on this robot: Silicon Labs CP2102, USB serial number 0001.
+# Keep the device name stable across USB re-enumeration without matching other
+# CP2102 adapters. The `uedalab` user belongs to the `dialout` group.
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", GROUP="dialout", MODE="0660", SYMLINK+="rplidar"

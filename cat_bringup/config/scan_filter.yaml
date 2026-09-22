@@ -1,0 +1,8 @@
+sector_scan_filter:
+  ros__parameters:
+    # Must match base_link -> laser yaw in the URDF; no TF required standalone.
+    mounting_yaw: 3.141592653589793
+    front_angle_deg: 200.0
+    # Distances measured from the LiDAR origin, bearings relative to vehicle +X.
+    front_min_range: 0.1
+    rear_min_range: 0.4

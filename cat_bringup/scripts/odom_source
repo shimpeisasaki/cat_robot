@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Select one odometry source at startup. Never switch sources while moving.
+
+VIO camera poses are converted to planar base poses before publication.
+VIO velocity is derived from successive transformed poses: the ZED twist
+covariance may be zero and its reference point is the camera, not the base.
+After a tracking gap/jump the output is latched off until this node restarts.
+No command topics are published; this is NOT an emergency-stop mechanism.
+"""
+import copy
+import math
+import numpy as np
+from scipy.spatial.transform import Rotation
+import rclpy
+from rclpy.node import Node
+from rclpy.time import Time
+from rclpy.qos import qos_profile_sensor_data
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TransformStamped
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster
+
+
+def matrix(position, quaternion):
+    q = np.array([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
+    p = np.array([position.x, position.y, position.z])
+    if not np.all(np.isfinite(np.r_[p, q])) or np.linalg.norm(q) < 1e-6:
+        raise ValueError('Invalid pose')
+    result = np.eye(4)
+    result[:3, :3] = Rotation.from_quat(q).as_matrix()
+    result[:3, 3] = p
+    return result
+
+
+def planar(t):
+    return np.array([t[0, 3], t[1, 3], math.atan2(t[1, 0], t[0, 0])])
+
+
+def origin_for(t):
+    x, y, yaw = planar(t)
+    origin = np.eye(4)
+    origin[:3, :3] = Rotation.from_euler('z', yaw).as_matrix()
+    origin[:3, 3] = [x, y, t[2, 3]]
+    return np.linalg.inv(origin)
+
+
+def velocity(previous, current, dt):
+    delta = current-previous
+    delta[2] = math.atan2(math.sin(delta[2]), math.cos(delta[2]))
+    c, s = math.cos(current[2]), math.sin(current[2])
+    return np.array([c*delta[0]+s*delta[1], -s*delta[0]+c*delta[1], delta[2]])/dt
+
+
+class OdomSource(Node):
+    def __init__(self):
+        super().__init__('odom_source')
+        self.source = self.declare_parameter('source', 'vio').value
+        if self.source not in ('vio', 'wheel'):
+            raise ValueError('source must be vio or wheel')
+        self.pub = self.create_publisher(Odometry, '/odom', 10)
+        self.tf = TransformBroadcaster(self)
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
+        self.origin = None
+        self.previous = None
+        self.last_stamp = None
+        self.input_frames = None
+        self.failed = False
+        self.vio_jump_since = None
+        self.vio_jump_grace = .5
+        topic = '/zed/zed_node/odom' if self.source == 'vio' else '/wheel_odom'
+        self.create_subscription(Odometry, topic, self.receive, qos_profile_sensor_data)
+        self.get_logger().info(f'{topic} -> /odom and odom -> base_link; no automatic fallback')
+
+    def fail(self, reason):
+        self.failed = True
+        self.get_logger().error(reason+'; stop the robot and restart the launch. No odom/TF will be published.')
+
+    def receive(self, msg):
+        if self.failed:
+            return
+        stamp = Time.from_msg(msg.header.stamp).nanoseconds*1e-9
+        age = self.get_clock().now().nanoseconds*1e-9-stamp
+        if not -.1 <= age <= .5:
+            return
+        if self.last_stamp is not None:
+            if stamp < self.last_stamp:
+                self.fail('Input timestamp moved backwards')
+                return
+            if stamp == self.last_stamp:
+                return
+            if stamp-self.last_stamp > 1.:
+                self.fail('Odometry gap: source may have reset')
+                return
+        frames = (msg.header.frame_id, msg.child_frame_id)
+        if self.input_frames is not None and frames != self.input_frames:
+            self.fail('Input frames changed')
+            return
+        out = copy.deepcopy(msg)
+        if self.source == 'wheel':
+            if frames != ('wheel_odom', 'base_link'):
+                return
+            try:
+                matrix(msg.pose.pose.position, msg.pose.pose.orientation)
+            except ValueError:
+                return
+        else:
+            if frames != ('zed_odom', 'zed_camera_link'):
+                self.get_logger().warning('Expected zed_odom / zed_camera_link', throttle_duration_sec=5.)
+                return
+            try:
+                # Lookup camera -> base: T_world_base = T_world_camera * T_camera_base.
+                mounting = self.buffer.lookup_transform(msg.child_frame_id, 'base_link',
+                                                       Time.from_msg(msg.header.stamp)).transform
+                extrinsic = matrix(mounting.translation, mounting.rotation)
+                base = matrix(msg.pose.pose.position, msg.pose.pose.orientation) @ extrinsic
+            except Exception as exc:
+                self.get_logger().warning('Waiting for valid VIO/extrinsic: '+str(exc), throttle_duration_sec=5.)
+                return
+            if self.origin is None:
+                self.origin = origin_for(base)
+            pose = planar(self.origin @ base)
+            v = np.zeros(3)
+            if self.previous is not None:
+                dt = stamp-self.last_stamp
+                v = velocity(self.previous, pose, dt)
+                if np.linalg.norm(v[:2]) > 2.5 or abs(v[2]) > 5.:
+                    if self.vio_jump_since is None:
+                        self.vio_jump_since = stamp
+                    elapsed = stamp-self.vio_jump_since
+                    detail = (f'Implausible VIO pose jump for {elapsed:.3f}s: '
+                              f'dt={dt:.4f}s linear={np.linalg.norm(v[:2]):.3f}m/s '
+                              f'angular={abs(v[2]):.3f}rad/s')
+                    if elapsed >= self.vio_jump_grace:
+                        self.fail(detail)
+                    else:
+                        self.get_logger().warning(detail+'; dropping sample during 0.5s grace period',
+                                                  throttle_duration_sec=.25)
+                    return
+                self.vio_jump_since = None
+            out.pose.pose.position.x = float(pose[0])
+            out.pose.pose.position.y = float(pose[1])
+            out.pose.pose.position.z = 0.
+            out.pose.pose.orientation.x = out.pose.pose.orientation.y = 0.
+            out.pose.pose.orientation.z = math.sin(pose[2]/2)
+            out.pose.pose.orientation.w = math.cos(pose[2]/2)
+            out.twist.twist.linear.x, out.twist.twist.linear.y = float(v[0]), float(v[1])
+            out.twist.twist.linear.z = 0.
+            out.twist.twist.angular.x = out.twist.twist.angular.y = 0.
+            out.twist.twist.angular.z = float(v[2])
+            # Conservative diagonal uncertainty after lever-arm/planar conversion.
+            cov = np.asarray(msg.pose.covariance).reshape(6, 6)
+            if not np.all(np.isfinite(cov)) or np.any(np.diag(cov) < 0):
+                return
+            angle_var = max(.0001, float(np.trace(cov[3:, 3:])))
+            pos_var = max(.0001, 2*float(np.trace(cov[:3, :3])) +
+                          2*np.linalg.norm(extrinsic[:3, 3])**2*angle_var)
+            out.pose.covariance = np.diag([pos_var, pos_var, 1e6, 1e6, 1e6, angle_var]).ravel().tolist()
+            dt = stamp-self.last_stamp if self.last_stamp is not None else .01
+            out.twist.covariance = np.diag([2*pos_var/dt**2]*2+[1e6]*3+
+                                          [2*angle_var/dt**2]).ravel().tolist()
+            self.previous = pose
+        self.last_stamp = stamp
+        self.input_frames = frames
+        out.header.frame_id = 'odom'
+        out.child_frame_id = 'base_link'
+        tf = TransformStamped()
+        tf.header = copy.deepcopy(out.header)
+        tf.child_frame_id = 'base_link'
+        tf.transform.translation.x = out.pose.pose.position.x
+        tf.transform.translation.y = out.pose.pose.position.y
+        tf.transform.translation.z = out.pose.pose.position.z
+        tf.transform.rotation = copy.deepcopy(out.pose.pose.orientation)
+        self.pub.publish(out)
+        self.tf.sendTransform(tf)
+
+
+def main():
+    rclpy.init()
+    node = OdomSource()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,41 @@
+# Copy of the base settings for autonomous experiments.
+# Adjust serial device, wheel geometry, motor direction, and covariances from measurements.
+velocity_control_node:
+  ros__parameters:
+    # CH4 / motor ID 2 and CH3 / motor ID 1 are separate RS485 buses.
+    left_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06
+    right_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04
+    left_motor_id: 2
+    right_motor_id: 1
+    max_check: 2
+    command_timeout: 0.5
+    # Two RS485 request/reply transactions are performed every cycle.
+    motor_update_period: 0.033333
+    serial_reply_timeout: 0.020
+    online_timeout: 0.5
+    # USB reconnect: exit after this loss interval; launch respawn reopens paths.
+    reconnect_restart_timeout: 2.0
+
+two_wheels_robot_node:
+  ros__parameters:
+    wheel_base: 0.208
+    # Effective rolling radius calibrated from repeated 3 m ground tests.
+    # Physical tire radius remains 0.050 m in the URDF.
+    R_wheel: 0.05065
+    pub_tf: true
+    update_period: 0.033333
+    feedback_timeout: 0.2
+    enable_joystick: false
+    left_motor_id: 2
+    right_motor_id: 1
+    left_direction: -1
+    right_direction: 1
+    # Bench tests: positive feedback read ~0.7-0.9 RPM below negative magnitude.
+    # Add this to signed raw RPM before applying the motor mounting direction.
+    rpm_feedback_offset: 0.5
+    odom_frame: odom
+    base_frame: base_link
+    pose_xy_covariance: 0.01
+    pose_yaw_covariance: 0.02
+    twist_linear_covariance: 0.01
+    twist_angular_covariance: 0.02
