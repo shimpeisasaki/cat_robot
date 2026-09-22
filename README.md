@@ -71,11 +71,17 @@ ros2 launch ublox_dgnss gnss_launch_compatible.launch.py
 
 ## 既存PCでの移行
 
-パッケージのソース位置が変わったため、両パッケージを再ビルドしてください。
-旧installのシンボリックリンク競合が出る場合は、別のbuild/install先でビルドできます。
+パッケージのソース位置が変わったため、旧CMakeキャッシュを再利用せず別のbuild/install先で再ビルドします。
+この手順は既存のセンサドライバーが`install/`にビルド済みのPC用です。
+旧モーターリポジトリは`.repository_backups/ddsm115_controller_ros2`へ退避してあります。
+退避先はCOLCON_IGNOREで探索対象外にしています。
 
 ```bash
-colcon build --packages-select ddsm115_controller cat_bringup --symlink-install
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+colcon build --build-base build_cat_robot --install-base install_cat_robot \
+  --packages-select ddsm115_controller cat_bringup experiment_nav2 --symlink-install
+source install_cat_robot/setup.bash
 ```
 
 Nav2用の`experiment_nav2`は別リポジトリです。通常bringupとnavigationは同時起動しません。
