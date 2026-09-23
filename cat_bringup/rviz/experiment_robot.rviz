@@ -5,9 +5,8 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Wheel odometry1/Shape1
-        - /ZED registered cloud1
       Splitter Ratio: 0.5
-    Tree Height: 499
+    Tree Height: 312
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -154,8 +153,6 @@ Visualization Manager:
           Value: true
         zed_camera_link:
           Value: true
-        zed_imu_link:
-          Value: true
         zed_left_camera_frame:
           Value: true
         zed_left_camera_frame_optical:
@@ -189,8 +186,6 @@ Visualization Manager:
           zed_camera_link:
             zed_camera_center:
               zed_left_camera_frame:
-                zed_imu_link:
-                  {}
                 zed_left_camera_frame_optical:
                   {}
               zed_right_camera_frame:
@@ -285,6 +280,40 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /zed/zed_node/rgb/color/rect/image
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 47
+      Min Color: 0; 0; 0
+      Min Intensity: 47
+      Name: LaserScan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /scan_raw
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 35; 35; 35
@@ -323,7 +352,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.8864948749542236
+      Distance: 3.846968412399292
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -338,22 +367,22 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4850001037120819
+      Pitch: 0.7047970294952393
       Target Frame: base_link
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.0600006580352783
+      Yaw: 2.825007915496826
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1403
+  Height: 1016
   Hide Left Dock: false
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001cb00000521fc0200000003fb000000100044006900730070006c006100790073010000003d00000276000000c900fffffffb0000000a0056006900650077007301000002b900000199000000a400fffffffb0000000a0049006d0061006700650100000458000001060000002800ffffff0000082f0000052100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000001cb0000039efc0200000003fb000000100044006900730070006c006100790073010000003d000001bb000000c900fffffffb0000000a0056006900650077007301000001fe0000011f000000a400fffffffb0000000a0049006d0061006700650100000323000000b80000002800ffffff000005710000039e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
-  Width: 2560
-  X: 0
-  Y: 0
+  Width: 1858
+  X: 62
+  Y: 27
