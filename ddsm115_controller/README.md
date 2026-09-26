@@ -58,7 +58,7 @@ This launch uses the same `config/robot.yaml` and scans motor IDs 1 and 2 by def
 
 ## Manual Joystick Drive
 
-Use `experiment_nav2` for manual operation. Its curvature-teleop node converts the analog right
+Use `experiment_cat` for manual operation. Its curvature-teleop node converts the analog right
 stick into a linear velocity and a path curvature, then routes `/cmd_vel_teleop` through
 `nav2_velocity_smoother` to `/cmd_vel`. The base driver itself remains joystick-free and accepts only
 the smoothed velocity command.

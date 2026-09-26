@@ -36,7 +36,8 @@ class SectorScanFilter(Node):
                 not 0 < self.front_angle <= 2 * math.pi or
                 min(self.front_min, self.rear_min) < 0):
             raise ValueError('Invalid angular range filter parameters')
-        self.pub = self.create_publisher(LaserScan, '/scan', qos_profile_sensor_data)
+        # emcl2 requests Reliable; Best Effort consumers can also subscribe.
+        self.pub = self.create_publisher(LaserScan, '/scan', 5)
         self.sub = self.create_subscription(
             LaserScan, '/scan_raw', self.receive, qos_profile_sensor_data)
         self.get_logger().info(
