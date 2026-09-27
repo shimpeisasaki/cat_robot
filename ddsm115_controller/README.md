@@ -131,6 +131,9 @@ No additional detail query is sent during normal control. `update_period` contro
 and `odom -> base_link` TF rate.
 
 It provides `/ddsm115/set_freewheel` (`std_srvs/srv/SetBool`). Set `data: true` for freewheel and `data: false` to restore velocity mode at zero RPM.
+`freewheel_on_shutdown: true` makes normal process or launch shutdown send zero current and leave
+the motor controller in freewheel mode. If that switch cannot be completed, the driver falls back
+to its brake command. Communication loss while the driver is still running continues to brake.
 
 ## Safety
 

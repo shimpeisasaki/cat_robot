@@ -7,6 +7,8 @@ velocity_control_node:
     right_motor_id: 1
     max_check: 2
     command_timeout: 0.5
+    # Ctrl+C / launch shutdown leaves the powered motors in freewheel mode.
+    freewheel_on_shutdown: true
     # Two RS485 request/reply transactions are performed every cycle.
     motor_update_period: 0.033333
     serial_reply_timeout: 0.020

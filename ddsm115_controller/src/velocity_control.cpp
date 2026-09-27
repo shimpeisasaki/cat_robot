@@ -27,8 +27,11 @@ namespace ddsm115_controller
 
 struct MotorChannel
 {
-  MotorChannel(std::string label, int id, std::unique_ptr<MotorControl> motor)
-  : name(std::move(label)), motor_id(id), driver(std::move(motor)) {}
+  MotorChannel(
+    std::string label, int id, std::unique_ptr<MotorControl> motor,
+    bool freewheel_on_shutdown)
+  : name(std::move(label)), motor_id(id), driver(std::move(motor)),
+    freewheel_on_shutdown(freewheel_on_shutdown) {}
   MotorChannel(MotorChannel &&) = default;
   MotorChannel(const MotorChannel &) = delete;
   ~MotorChannel()
@@ -36,6 +39,23 @@ struct MotorChannel
     // Also runs on partial construction failure, exception, and normal SIGINT exit.
     // Does not depend on ROS publishers or a running ROS context.
     if (!driver) {return;}
+    if (freewheel_on_shutdown) {
+      for (int attempt = 0; attempt < 3; ++attempt) {
+        try {
+          driver->send_current(motor_id, 0.0F);
+          driver->set_drive_mode(motor_id, 1);
+          driver->send_current(motor_id, 0.0F);
+          return;
+        } catch (const std::exception & error) {
+          std::fprintf(
+            stderr, "Shutdown freewheel %s ID %d: %s\n", name.c_str(), motor_id,
+            error.what());
+        }
+      }
+      std::fprintf(
+        stderr, "Shutdown freewheel %s ID %d: not confirmed; falling back to brake\n",
+        name.c_str(), motor_id);
+    }
     for (int attempt = 0; attempt < 3; ++attempt) {
       try {
         driver->send_current(motor_id, 0.0F);  // zero in either current or velocity mode
@@ -54,6 +74,7 @@ struct MotorChannel
   std::string name;
   int motor_id;
   std::unique_ptr<MotorControl> driver;
+  bool freewheel_on_shutdown;
 };
 
 class VelocityControl : public rclcpp::Node
@@ -70,6 +91,7 @@ public:
     const int right_motor_id = declare_parameter("right_motor_id", 1);
     const double command_timeout = declare_parameter("command_timeout", 0.5);
     safety_required_ = declare_parameter("require_safety_heartbeat", false);
+    const bool freewheel_on_shutdown = declare_parameter("freewheel_on_shutdown", false);
     const double safety_timeout = declare_parameter("safety_heartbeat_timeout", 0.3);
     if (!(safety_timeout >= 0.1 && safety_timeout <= 1.0)) {
       throw std::invalid_argument("safety_heartbeat_timeout must be 0.1..1.0 seconds");
@@ -106,8 +128,10 @@ public:
       throw std::invalid_argument("serial_reply_timeout must be at least one millisecond");
     }
 
-    channels_.push_back({"left", left_motor_id, std::make_unique<MotorControl>(left_device)});
-    channels_.push_back({"right", right_motor_id, std::make_unique<MotorControl>(right_device)});
+    channels_.push_back(
+      {"left", left_motor_id, std::make_unique<MotorControl>(left_device), freewheel_on_shutdown});
+    channels_.push_back(
+      {"right", right_motor_id, std::make_unique<MotorControl>(right_device), freewheel_on_shutdown});
     for (auto & channel : channels_) {
       channel.driver->set_reply_timeout(reply_timeout);
     }
@@ -122,6 +146,8 @@ public:
     maximum_motor_id_ = std::max(left_motor_id, right_motor_id);
 
     RCLCPP_INFO(get_logger(), "Start velocity_control_node");
+    RCLCPP_INFO(
+      get_logger(), "shutdown motor mode: %s", freewheel_on_shutdown ? "freewheel" : "brake");
     RCLCPP_INFO(
       get_logger(), "left channel: motor ID %d on %s", left_motor_id,
       left_device.c_str());
