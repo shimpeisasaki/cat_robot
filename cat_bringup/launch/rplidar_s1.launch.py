@@ -1,8 +1,7 @@
-"""Start the robot's RPLIDAR S1 standalone, optionally with RViz."""
+"""Internal RPLIDAR S1 driver and vehicle-sector filter."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
-from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -15,9 +14,6 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('frame_id', default_value='laser'),
-        # Do not call this simply "rviz": parent launches may start their own
-        # RViz and pass a different value to this included launch.
-        DeclareLaunchArgument('lidar_rviz', default_value='true', choices=['true', 'false']),
         GroupAction(actions=[
           SetRemap(src='/scan', dst='/scan_raw'),
           IncludeLaunchDescription(
@@ -37,9 +33,4 @@ def generate_launch_description():
             parameters=[PathJoinSubstitution([
                 FindPackageShare('cat_bringup'), 'config', 'scan_filter.yaml']),
                 {'scan_frame': LaunchConfiguration('frame_id')}]),
-        Node(
-            package='rviz2', executable='rviz2', name='rplidar_rviz',
-            arguments=['-d', PathJoinSubstitution([
-                sllidar_share, 'rviz', 'sllidar_ros2.rviz'])],
-            output='screen', condition=IfCondition(LaunchConfiguration('lidar_rviz'))),
     ])

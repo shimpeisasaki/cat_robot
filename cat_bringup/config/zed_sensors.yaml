@@ -13,7 +13,7 @@
       pub_frame_rate: 15.0
       grab_compute_capping_fps: 0.0
     video:
-      publish_rgb: true
+      publish_rgb: false
       publish_left_right: false
       publish_raw: false
       publish_gray: false
@@ -42,6 +42,7 @@
       imu_fusion: false
       publish_odom_pose: false
       publish_pose_cov: false
+      publish_cam_path: false
       publish_tf: false
       publish_map_tf: false
       area_memory: false

@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Robot command selection, stationary handover and driver lease.
+
+Not a certified emergency stop. Driver lease and physical stop remain necessary.
+The timer uses steady time; joystick header ages use ROS time. No automatic re-arm.
+"""
+import math
+import time
+import rclpy
+from rclpy.node import Node
+from rclpy.clock import Clock, ClockType
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Joy
+from std_msgs.msg import UInt8, Bool, String
+from std_srvs.srv import Trigger
+
+
+class BaseSafety(Node):
+    def __init__(self):
+        super().__init__('base_safety')
+        self.b = self.declare_parameter('brake_button', 1).value
+        self.y = self.declare_parameter('free_button', 3).value
+        self.a = self.declare_parameter('navigation_button', 0).value
+        self.x = self.declare_parameter('manual_button', 2).value
+        self.joystick = self.declare_parameter('enable_joystick', True).value
+        self.require_navigation = self.declare_parameter('require_navigation', False).value
+        self.navigation_ready = False
+        self.motor_healthy = False
+        self.stationary = False
+        self.mode = 0
+        self.drive_source = 'navigation'
+        self.pending_drive = None
+        self.reason = 'Startup: brake; initialize localization, then press A or call ~/arm'
+        self.fresh = {}
+        self.stamps = {}
+        self.buttons = []
+        self.raw = {'navigation': Twist(), 'manual': Twist()}
+        self.last_command = {'navigation': -math.inf, 'manual': -math.inf}
+        self.armed_at = math.inf
+        self.pending_free = None
+        self.stopped_since = None
+        self.last_tick = time.monotonic()
+        self.ready_since = None
+        self.output = self.create_publisher(Twist, '/cmd_vel_safe', 1)
+        self.lease = self.create_publisher(UInt8, '/base_safety/mode', 1)
+        status_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.status = self.create_publisher(String, '~/status', status_qos)
+        self.create_subscription(
+            Twist, '/cmd_vel_external', lambda msg: self.command('navigation', msg), 1)
+        self.create_subscription(
+            Twist, '/cmd_vel_teleop', lambda msg: self.command('manual', msg), 1)
+        self.create_subscription(Joy, '/joy', self.joy, qos_profile_sensor_data)
+        self.create_subscription(UInt8, '/base/state', self.motor_state, 1)
+        self.create_subscription(Bool, '/navigation/ready', self.navigation_state, 1)
+        self.create_subscription(Bool, '/ddsm115/brake', self.external_brake, qos_profile_sensor_data)
+        self.create_service(Trigger, '~/arm', self.arm)
+        self.create_service(Trigger, '~/manual', self.manual_service)
+        self.create_service(Trigger, '~/brake', self.brake_service)
+        self.create_service(Trigger, '~/free', self.free_service)
+        self.create_timer(.05, self.tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
+        self.get_logger().warning(self.reason)
+
+    def header_ok(self, key, header, max_age=.5):
+        t = header.stamp.sec + header.stamp.nanosec*1e-9
+        now = self.get_clock().now().nanoseconds*1e-9
+        if t <= 0 or not -.1 <= now-t <= max_age or t <= self.stamps.get(key, -math.inf):
+            return False
+        self.stamps[key] = t
+        self.fresh[key] = time.monotonic()
+        return True
+
+    def motor_state(self, msg):
+        self.motor_healthy = bool(msg.data & 1)
+        self.stationary = self.motor_healthy and bool(msg.data & 2)
+        self.fresh['motor'] = time.monotonic()
+
+    def navigation_state(self, msg):
+        self.navigation_ready = msg.data
+        self.fresh['navigation'] = time.monotonic()
+
+    def joy(self, msg):
+        if len(msg.buttons) <= max(self.a, self.b, self.x, self.y) or not self.header_ok('joy', msg.header):
+            return
+        previous = self.buttons
+        self.buttons = list(msg.buttons)
+        pressed = lambda i: self.buttons[i] and (not previous or not previous[i])
+        if self.buttons[self.b]:  # brake always wins over simultaneous Y
+            self.stop('Joystick B')
+        elif pressed(self.y):
+            self.request_free()
+        elif pressed(self.a):
+            self.request_drive('navigation')
+        elif pressed(self.x):
+            self.request_drive('manual')
+
+    def command(self, source, msg):
+        values = [msg.linear.x, msg.linear.y, msg.linear.z,
+                  msg.angular.x, msg.angular.y, msg.angular.z]
+        if not all(math.isfinite(v) for v in values):
+            self.stop('Invalid cmd_vel')
+            return
+        if abs(msg.linear.x) > 2. or abs(msg.angular.z) > 3. or abs(msg.linear.y) > .001:
+            self.stop('cmd_vel exceeds safety envelope')
+            return
+        self.raw[source] = msg
+        self.last_command[source] = time.monotonic()
+
+    def external_brake(self, msg):
+        if msg.data:
+            self.stop('External brake command')
+
+    def stop(self, reason):
+        changed = self.mode != 0 or self.reason != reason
+        self.mode = 0
+        self.pending_free = None
+        self.pending_drive = None
+        self.stopped_since = None
+        self.ready_since = None
+        self.armed_at = math.inf
+        self.reason = reason
+        self.output.publish(Twist())
+        self.lease.publish(UInt8(data=0))
+        if changed:
+            self.get_logger().warning('BRAKE: '+reason)
+
+    def request_free(self):
+        self.stop('Free requested: braking until wheel feedback confirms rest')
+        self.pending_free = time.monotonic()
+
+    def activate_drive(self, source):
+        self.mode = 2
+        self.drive_source = source
+        self.pending_drive = None
+        self.armed_at = time.monotonic()
+        self.reason = ('NAVIGATION: Nav2 command enabled' if source == 'navigation' else
+                       'MANUAL: X selected, right stick enabled')
+
+    def request_drive(self, source):
+        if self.mode == 2:
+            if self.drive_source == source:
+                return
+            self.stop(f'Switching to {source}: braking before source change')
+        # Leaving freewheel always passes through a braking, stationary state.
+        if self.mode == 1 or self.pending_free is not None:
+            self.stop('Leaving FREE: braking before drive')
+        self.pending_drive = source
+        self.reason = f'{source.upper()} requested: waiting for 2s healthy stationary state'
+
+    def physical_problem(self):
+        now = time.monotonic()
+        if self.joystick and now-self.fresh.get('joy', -math.inf) > .5:
+            return 'joy stale/missing'
+        if now-self.fresh.get('motor', -math.inf) > .3 or not self.motor_healthy:
+            return 'Motor feedback stale/fault'
+        for topic in ('/cmd_vel_safe', '/base_safety/mode', '/cmd_vel_teleop', '/cmd_vel_external'):
+            if self.count_publishers(topic) > 1:
+                return 'Multiple command publishers: '+topic
+        return None
+
+    def problem(self):
+        issue = self.physical_problem()
+        if issue:
+            return issue
+        if self.require_navigation and (not self.navigation_ready or
+                time.monotonic()-self.fresh.get('navigation', -math.inf) > .3):
+            return 'Navigation sensor/localization guard not ready'
+        return None
+
+    def arm(self, _, response):
+        issue = self.problem()
+        nav = self.raw['navigation']
+        fresh_nonzero = (time.monotonic()-self.last_command['navigation'] < .5 and
+                         (abs(nav.linear.x) > .001 or abs(nav.angular.z) > .001))
+        if self.mode != 0 or self.pending_free is not None:
+            issue = 'Press B / call brake before arming'
+        elif self.ready_since is None or time.monotonic()-self.ready_since < 2:
+            issue = issue or 'Healthy and stationary state required for 2 seconds'
+        elif fresh_nonzero:
+            issue = 'Navigation command is nonzero; wait for zero before arming'
+        elif self.joystick and (not self.buttons or self.buttons[self.b] or self.buttons[self.y]):
+            issue = 'Release joystick B/Y first'
+        if issue:
+            response.message = issue
+            return response
+        self.activate_drive('navigation')
+        response.success = True
+        response.message = 'NAVIGATION enabled; an existing or new goal may run'
+        return response
+
+    def manual_service(self, _, response):
+        if not self.joystick:
+            response.message = 'Joystick disabled'
+            return response
+        self.request_drive('manual')
+        response.success = True
+        response.message = 'Manual drive requested'
+        return response
+
+    def brake_service(self, _, response):
+        self.stop('Operator brake service')
+        response.success = True
+        response.message = 'Brake requested; inspect wheel stop'
+        return response
+
+    def free_service(self, _, response):
+        self.request_free()
+        response.success = True
+        response.message = 'Free pending: requires fresh joystick and stationary motor feedback'
+        return response
+
+    def tick(self):
+        now = time.monotonic()
+        if now-self.last_tick > .25 and self.mode != 0:
+            self.stop('Safety timer stalled')
+        self.last_tick = now
+        if self.mode == 2:
+            manual = self.drive_source == 'manual'
+            # Manual drive remains available for recovery when localization,
+            # LiDAR, odometry, TF, or any Nav2 node is unavailable.
+            issue = self.physical_problem() if manual else self.problem()
+            if issue:
+                self.stop(issue)
+        if self.mode == 1 or self.pending_free is not None:
+            issue = self.physical_problem()
+            if issue:
+                self.stop(issue)
+        if self.pending_free is not None:
+            if self.stationary:
+                self.stopped_since = self.stopped_since or now
+                if now-self.stopped_since >= .3:
+                    self.mode = 1
+                    self.pending_free = None
+                    self.reason = 'FREE: motor torque disabled; vehicle may roll'
+            else:
+                self.stopped_since = None
+            if self.pending_free is not None and now-self.pending_free > 3:
+                self.stop('Free rejected: wheels did not stop')
+        if self.mode != 2:
+            pending_manual = self.pending_drive == 'manual'
+            healthy = ((self.physical_problem() if pending_manual else self.problem()) is None and
+                       self.stationary)
+            self.ready_since = (self.ready_since or now) if healthy else None
+            if (healthy and self.pending_drive is not None and
+                    now-self.ready_since >= 2):
+                self.activate_drive(self.pending_drive)
+        source = self.drive_source
+        fresh = (now-self.last_command[source] <= .3 and
+                 self.last_command[source] > self.armed_at)
+        self.output.publish(self.raw[source] if self.mode == 2 and fresh else Twist())
+        self.lease.publish(UInt8(data=self.mode))
+        self.status.publish(String(data=f'{self.mode}: {self.reason}'))
+
+
+def main():
+    rclpy.init()
+    node = BaseSafety()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # If ROS context is already closed, the independent driver lease still expires.
+        if rclpy.ok():
+            node.stop('Safety node shutdown')
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

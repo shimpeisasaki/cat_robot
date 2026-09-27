@@ -7,10 +7,9 @@ curvature_teleop:
     joystick_deadzone: 0.02
     curvature_deadzone: 0.03
     normal_max_linear_speed: 1.0      # m/s
-    high_max_linear_speed: 1.666667   # 6 km/h
     maximum_curvature: 1.1            # 1/m; minimum nominal turn radius is 0.91 m
 
-velocity_smoother:
+velocity_smoother_manual:
   ros__parameters:
     use_sim_time: False
     smoothing_frequency: 30.0

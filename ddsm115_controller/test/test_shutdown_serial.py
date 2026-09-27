@@ -5,6 +5,7 @@ Run after colcon build. Checks SIGINT and partial-construction teardown.
 import errno
 import os
 from pathlib import Path
+from ament_index_python.packages import get_package_prefix
 import pty
 import select
 import signal
@@ -62,7 +63,7 @@ class FakeMotor:
 
 
 def launch(left, right, tmp_path):
-    executable = Path(__file__).resolve().parents[3]/'build/ddsm115_controller/velocity_control'
+    executable = Path(get_package_prefix('ddsm115_controller'))/'lib/ddsm115_controller/base_driver'
     assert executable.exists(), 'Build ddsm115_controller first'
     env = dict(os.environ, ROS_DOMAIN_ID='231', ROS_LOCALHOST_ONLY='1', ROS_LOG_DIR=str(tmp_path))
     return subprocess.Popen([str(executable), '--ros-args', '-p', f'left_usb_dev:={left.path}',

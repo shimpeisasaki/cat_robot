@@ -1,0 +1,41 @@
+# Single source of machine geometry and serial settings.
+base_driver:
+  ros__parameters:
+    left_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06
+    right_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04
+    left_motor_id: 2
+    right_motor_id: 1
+    command_timeout: 0.5
+    # Preserve the existing Ctrl+C behavior: release torque on shutdown.
+    freewheel_on_shutdown: true
+    motor_update_period: 0.033333
+    serial_reply_timeout: 0.02
+    online_timeout: 0.5
+    reconnect_restart_timeout: 2.0
+    wheel_base: 0.208
+    # Effective rolling radius; URDF retains the measured 0.050 m tire radius.
+    R_wheel: 0.05065
+    left_direction: -1
+    right_direction: 1
+    rpm_feedback_offset: 0.5
+    odom_frame: odom
+    base_frame: base_link
+    pose_xy_covariance: 0.01
+    pose_yaw_covariance: 0.02
+    twist_linear_covariance: 0.01
+    twist_angular_covariance: 0.02
+    require_safety_heartbeat: true
+    enable_motor_tools: false
+
+# Maintenance GUI limits; geometry is read from base_driver above.
+motor_test_gui:
+  ros__parameters:
+    rpm_step: 10
+    max_test_rpm: 150
+    linear_step: 0.02
+    angular_step: 0.1
+    max_linear_speed: 1.762
+    max_angular_speed: 2.0
+    control_period: 0.033333
+    joystick_deadzone: 0.03
+    gui_joystick_timeout: 2.0

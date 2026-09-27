@@ -1,4 +1,4 @@
-"""DDSM115 + ZED Mini sensor inspection, without Nav2 or GNSS."""
+"""Robot hardware, sensors and command gate; independent of navigation."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -19,32 +19,31 @@ def generate_launch_description():
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
+        DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_serial', default_value=''),
+        DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
+        DeclareLaunchArgument('require_navigation', default_value='false'),
+        DeclareLaunchArgument('enable_motor_tools', default_value='false'),
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
-            share, 'config', 'robot_nav2.yaml'])),
+            share, 'config', 'robot.yaml'])),
         DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
             share, 'config', 'manual_control.yaml'])),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
-            share, 'config', PythonExpression(["'zed_vio_test.yaml' if '",
+            share, 'config', PythonExpression(["'zed_vio.yaml' if '",
                 LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
                  Command(['xacro ', model]), value_type=str)}], output='screen'),
-        Node(package='ddsm115_controller', executable='velocity_control',
-             name='velocity_control_node', parameters=[robot_config,
-                 {'require_safety_heartbeat': True, 'safety_heartbeat_timeout': 0.3}], output='screen',
-             respawn=True, respawn_delay=2.0,
+        Node(package='ddsm115_controller', executable='base_driver',
+             name='base_driver', parameters=[robot_config, {
+                 'require_safety_heartbeat': True,
+                 'enable_motor_tools': ParameterValue(LaunchConfiguration('enable_motor_tools'), value_type=bool)}],
+             output='screen', respawn=True, respawn_delay=2.0,
              condition=IfCondition(LaunchConfiguration('use_base'))),
-        Node(package='ddsm115_controller', executable='two_wheels_robot',
-             name='two_wheels_robot_node',
-             parameters=[robot_config, {
-                 'enable_joystick': False,
-                 'pub_tf': False}],
-             remappings=[('/odom', '/wheel/odom'), ('/cmd_vel', '/cmd_vel_safe')],
-             output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'odometry.launch.py'])),
@@ -54,19 +53,21 @@ def generate_launch_description():
              parameters=[{'autorepeat_rate': 20.0}],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='ddsm115_controller', executable='curvature_teleop',
-             name='curvature_teleop', parameters=[manual_config, {'safety_managed': True}], output='screen',
+             name='curvature_teleop', parameters=[manual_config], output='screen',
+             remappings=[('/cmd_vel_teleop', '/cmd_vel_teleop_raw')],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='nav2_velocity_smoother', executable='velocity_smoother',
-             name='velocity_smoother', parameters=[manual_config], output='screen',
-             remappings=[('cmd_vel', '/cmd_vel_selected'), ('cmd_vel_smoothed', '/cmd_vel_smoothed')],
+             name='velocity_smoother_manual', parameters=[manual_config], output='screen',
+             remappings=[('cmd_vel', '/cmd_vel_teleop_raw'), ('cmd_vel_smoothed', '/cmd_vel_teleop')],
              condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
              name='manual_velocity_smoother_lifecycle_manager', output='screen',
-             parameters=[{'autostart': True, 'node_names': ['velocity_smoother']}],
+             parameters=[{'autostart': True, 'node_names': ['velocity_smoother_manual']}],
              condition=IfCondition(LaunchConfiguration('use_base'))),
-        Node(package='cat_bringup', executable='command_mux', name='command_mux',
-             parameters=[{'enable_joystick': ParameterValue(
-                 LaunchConfiguration('enable_joystick'), value_type=bool)}],
+        Node(package='cat_bringup', executable='base_safety', name='base_safety',
+             parameters=[{
+                 'enable_joystick': ParameterValue(LaunchConfiguration('enable_joystick'), value_type=bool),
+                 'require_navigation': ParameterValue(LaunchConfiguration('require_navigation'), value_type=bool)}],
              output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
@@ -80,7 +81,13 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'rplidar_s1.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_lidar')),
-            launch_arguments={'lidar_rviz': 'false'}.items()),
+            launch_arguments={'serial_port': LaunchConfiguration('serial_port')}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),
+            condition=IfCondition(LaunchConfiguration('use_gnss')),
+            launch_arguments={'frame_id': 'gnss_antenna_link',
+                              'device_serial_string': LaunchConfiguration('gnss_serial')}.items()),
         Node(package='rviz2', executable='rviz2', output='screen',
              arguments=['-d', PathJoinSubstitution([
                  share, 'rviz', 'experiment_robot.rviz'])],

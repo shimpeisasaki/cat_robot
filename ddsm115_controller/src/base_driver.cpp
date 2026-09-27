@@ -9,6 +9,10 @@
 #include <vector>
 
 #include "ddsm115_controller/feedback.hpp"
+#include "ddsm115_controller/motor_channel.hpp"
+#include "ddsm115_controller/wheel_odometry.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "ddsm115_controller/motor_control.hpp"
 #include "ddsm115_controller/safety_lease.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -25,64 +29,14 @@ using namespace std::chrono_literals;
 namespace ddsm115_controller
 {
 
-struct MotorChannel
-{
-  MotorChannel(
-    std::string label, int id, std::unique_ptr<MotorControl> motor,
-    bool freewheel_on_shutdown)
-  : name(std::move(label)), motor_id(id), driver(std::move(motor)),
-    freewheel_on_shutdown(freewheel_on_shutdown) {}
-  MotorChannel(MotorChannel &&) = default;
-  MotorChannel(const MotorChannel &) = delete;
-  ~MotorChannel()
-  {
-    // Also runs on partial construction failure, exception, and normal SIGINT exit.
-    // Does not depend on ROS publishers or a running ROS context.
-    if (!driver) {return;}
-    if (freewheel_on_shutdown) {
-      for (int attempt = 0; attempt < 3; ++attempt) {
-        try {
-          driver->send_current(motor_id, 0.0F);
-          driver->set_drive_mode(motor_id, 1);
-          driver->send_current(motor_id, 0.0F);
-          return;
-        } catch (const std::exception & error) {
-          std::fprintf(
-            stderr, "Shutdown freewheel %s ID %d: %s\n", name.c_str(), motor_id,
-            error.what());
-        }
-      }
-      std::fprintf(
-        stderr, "Shutdown freewheel %s ID %d: not confirmed; falling back to brake\n",
-        name.c_str(), motor_id);
-    }
-    for (int attempt = 0; attempt < 3; ++attempt) {
-      try {
-        driver->send_current(motor_id, 0.0F);  // zero in either current or velocity mode
-        driver->set_drive_mode(motor_id, 2);
-        const auto reply = driver->set_brake(motor_id);
-        if (reply.id == motor_id && reply.rpm == 0 && reply.error == 0) {
-          return;
-        }
-      } catch (const std::exception & error) {
-        std::fprintf(stderr, "Shutdown brake %s ID %d: %s\n", name.c_str(), motor_id, error.what());
-      }
-    }
-    std::fprintf(stderr, "Shutdown brake %s ID %d: stop NOT confirmed; check physical stop\n",
-      name.c_str(), motor_id);
-  }
-  std::string name;
-  int motor_id;
-  std::unique_ptr<MotorControl> driver;
-  bool freewheel_on_shutdown;
-};
-
-class VelocityControl : public rclcpp::Node
+class BaseDriver : public rclcpp::Node
 {
 public:
-  VelocityControl()
-  : Node("velocity_control_node")
+  BaseDriver()
+  : Node("base_driver")
   {
+    wheel_ = std::make_unique<WheelOdometry>(*this);
+    tools_enabled_ = declare_parameter("enable_motor_tools", false);
     const std::string left_device = declare_parameter(
       "left_usb_dev", std::string("/dev/ddsm115_left"));
     const std::string right_device = declare_parameter(
@@ -145,7 +99,7 @@ public:
     status_publish_period_ = std::chrono::duration<double>(status_publish_period);
     maximum_motor_id_ = std::max(left_motor_id, right_motor_id);
 
-    RCLCPP_INFO(get_logger(), "Start velocity_control_node");
+    RCLCPP_INFO(get_logger(), "Start base_driver");
     RCLCPP_INFO(
       get_logger(), "shutdown motor mode: %s", freewheel_on_shutdown ? "freewheel" : "brake");
     RCLCPP_INFO(
@@ -184,14 +138,29 @@ public:
     brake_enabled_ = safety_required_;
 
     auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
-    rpm_command_subscription_ = create_subscription<std_msgs::msg::Int16MultiArray>(
-      "/ddsm115/rpm_cmd", qos,
-      [this](const std_msgs::msg::Int16MultiArray & message) {
-        std::fill(rpm_commands_.begin(), rpm_commands_.end(), std::int16_t{0});
-        const std::size_t count = std::min(message.data.size(), rpm_commands_.size());
-        for (std::size_t index = 0; index < count; ++index) {
-          rpm_commands_[index] = message.data[index];
+    if (tools_enabled_) {
+      rpm_command_subscription_ = create_subscription<std_msgs::msg::Int16MultiArray>(
+        "/ddsm115/rpm_cmd", qos,
+        [this](const std_msgs::msg::Int16MultiArray & message) {
+          std::fill(rpm_commands_.begin(), rpm_commands_.end(), std::int16_t{0});
+          const std::size_t count = std::min(message.data.size(), rpm_commands_.size());
+          for (std::size_t index = 0; index < count; ++index) {
+            rpm_commands_[index] = std::clamp<int>(message.data[index], -330, 330);
+          }
+          last_command_time_ = std::chrono::steady_clock::now();
+        });
+    }
+    velocity_subscription_ = create_subscription<geometry_msgs::msg::Twist>(
+      "/cmd_vel_safe", rclcpp::QoS(1),
+      [this](const geometry_msgs::msg::Twist & msg) {
+        const auto rpm = wheel_->command(msg);
+        if (!rpm) {set_brake_enabled(true); return;}
+        if (motion_rearm_required_) {
+          if (std::abs(msg.linear.x) > 1e-3 || std::abs(msg.angular.z) > 1e-3) {return;}
+          motion_rearm_required_ = false;
         }
+        rpm_commands_[channels_[0].motor_id - 1] = rpm->first;
+        rpm_commands_[channels_[1].motor_id - 1] = rpm->second;
         last_command_time_ = std::chrono::steady_clock::now();
       });
     brake_subscription_ = create_subscription<std_msgs::msg::Bool>(
@@ -199,7 +168,7 @@ public:
       [this](const std_msgs::msg::Bool & message) {set_brake_enabled(message.data);});
     if (safety_required_) {
       safety_subscription_ = create_subscription<std_msgs::msg::UInt8>(
-        "/navigation_safety/mode", rclcpp::QoS(1).reliable(),
+        "/base_safety/mode", rclcpp::QoS(1).reliable(),
         [this](const std_msgs::msg::UInt8 & message) {
           safety_lease_->receive(message.data, std::chrono::steady_clock::now());
         });
@@ -207,18 +176,22 @@ public:
     freewheel_service_ = create_service<std_srvs::srv::SetBool>(
       "/ddsm115/set_freewheel",
       std::bind(
-        &VelocityControl::set_freewheel, this, std::placeholders::_1,
+        &BaseDriver::set_freewheel, this, std::placeholders::_1,
         std::placeholders::_2));
-    rpm_publisher_ = create_publisher<std_msgs::msg::Int16MultiArray>("/ddsm115/rpm_fb", qos);
-    current_publisher_ = create_publisher<std_msgs::msg::Float32MultiArray>("/ddsm115/cur_fb", qos);
-    temperature_publisher_ =
-      create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/temp_fb", qos);
-    error_publisher_ = create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/error", qos);
-    online_id_publisher_ =
-      create_publisher<std_msgs::msg::UInt8MultiArray>("/ddsm115/online_id", qos);
+    if (tools_enabled_) {
+      rpm_publisher_ = create_publisher<std_msgs::msg::Int16MultiArray>("/ddsm115/rpm_fb", qos);
+      current_publisher_ = create_publisher<std_msgs::msg::Float32MultiArray>("/ddsm115/cur_fb", qos);
+      temperature_publisher_ =
+        create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/temp_fb", qos);
+      error_publisher_ = create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/error", qos);
+      online_id_publisher_ =
+        create_publisher<std_msgs::msg::UInt8MultiArray>("/ddsm115/online_id", qos);
+    }
+    state_publisher_ = create_publisher<std_msgs::msg::UInt8>("/base/state", rclcpp::QoS(1));
+    diagnostics_publisher_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 1);
     timer_ = create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(motor_update_period_),
-      std::bind(&VelocityControl::update, this));
+      std::bind(&BaseDriver::update, this));
   }
 
 private:
@@ -248,7 +221,7 @@ private:
   {
     if (safety_required_ && !safety_applying_) {
       if (!enabled) {
-        RCLCPP_WARN(get_logger(), "Brake release rejected: use /navigation_safety/arm");
+        RCLCPP_WARN(get_logger(), "Brake release rejected: use /base_safety/arm");
         return;
       }
       safety_lease_->trip();
@@ -283,6 +256,17 @@ private:
     try {
       std::fill(rpm_commands_.begin(), rpm_commands_.end(), std::int16_t{0});
       if (request->data) {
+        const auto t = std::chrono::steady_clock::now();
+        for (const auto & c : channels_) {
+          const auto i = c.motor_id - 1;
+          if (!rpm_feedback_valid_[i] || errors_[i] != 0 ||
+            t - last_response_times_[i] > online_timeout_ || std::abs(rpm_feedback_[i]) > 1)
+          {
+            response->success = false;
+            response->message = "Freewheel requires healthy stationary wheel feedback";
+            return;
+          }
+        }
         brake_enabled_ = false;
         for (auto & channel : channels_) {
           RCLCPP_INFO(
@@ -379,7 +363,47 @@ private:
       rclcpp::shutdown();
       return;
     }
-    publish_feedback(update_start);
+    const bool healthy = std::all_of(channels_.begin(), channels_.end(), [this](const auto & c) {
+      return rpm_feedback_valid_[c.motor_id - 1] && errors_[c.motor_id - 1] == 0;
+    });
+    const bool stopped = healthy && std::all_of(channels_.begin(), channels_.end(), [this](const auto & c) {
+      return std::abs(rpm_feedback_[c.motor_id - 1]) <= 1;
+    });
+    if (!healthy) {
+      motion_rearm_required_ = true;
+      std::fill(rpm_commands_.begin(), rpm_commands_.end(), std::int16_t{0});
+      set_brake_enabled(true);
+    }
+    wheel_->update(rpm_feedback_[channels_[0].motor_id - 1],
+      rpm_feedback_[channels_[1].motor_id - 1], healthy, update_start);
+    std_msgs::msg::UInt8 state;
+    state.data = healthy ? (stopped ? 3 : 1) : 0;  // bit 0: healthy, bit 1: stopped
+    state_publisher_->publish(state);
+    if (update_start - last_diagnostics_ >= 1s) {
+      diagnostic_msgs::msg::DiagnosticArray array;
+      array.header.stamp = now();
+      for (const auto & c : channels_) {
+        const auto i = c.motor_id - 1;
+        diagnostic_msgs::msg::DiagnosticStatus status;
+        status.name = "base/" + c.name;
+        status.hardware_id = std::to_string(c.motor_id);
+        status.level = rpm_feedback_valid_[i] && errors_[i] == 0 ? 0 : 2;
+        status.message = status.level == 0 ? "OK" : "Motor communication or controller fault";
+        for (const auto & entry : std::vector<std::pair<std::string, std::string>>{
+          {"current", std::to_string(current_feedback_[i])},
+          {"temperature", std::to_string(temperature_feedback_[i])},
+          {"error", std::to_string(errors_[i])}})
+        {
+          diagnostic_msgs::msg::KeyValue value;
+          value.key = entry.first; value.value = entry.second;
+          status.values.push_back(value);
+        }
+        array.status.push_back(status);
+      }
+      diagnostics_publisher_->publish(array);
+      last_diagnostics_ = update_start;
+    }
+    if (tools_enabled_) {publish_feedback(update_start);}
   }
 
   void publish_feedback(const std::chrono::steady_clock::time_point & publish_time)
@@ -416,6 +440,13 @@ private:
     }
   }
 
+  std::unique_ptr<WheelOdometry> wheel_;
+  bool tools_enabled_{false};
+  bool motion_rearm_required_{true};
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr velocity_subscription_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr state_publisher_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_publisher_;
+  std::chrono::steady_clock::time_point last_diagnostics_{};
   std::vector<MotorChannel> channels_;
   std::vector<int> online_ids_;
   std::vector<std::optional<std::int16_t>> rpm_commands_;
@@ -464,9 +495,9 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   try {
-    rclcpp::spin(std::make_shared<ddsm115_controller::VelocityControl>());
+    rclcpp::spin(std::make_shared<ddsm115_controller::BaseDriver>());
   } catch (const std::exception & error) {
-    RCLCPP_FATAL(rclcpp::get_logger("velocity_control_node"), "%s", error.what());
+    RCLCPP_FATAL(rclcpp::get_logger("base_driver"), "%s", error.what());
     rclcpp::shutdown();
     return 1;
   }
