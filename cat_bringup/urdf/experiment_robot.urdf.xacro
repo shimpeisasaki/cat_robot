@@ -74,12 +74,12 @@
   </joint>
 
   <!-- RPLIDAR S1 scan origin (rotating laser axis), not its bottom mounting face.
-       Measured from base_link: 8 mm forward, centered, 192 mm above ground. -->
+       Measured from base_link: 33.19 mm forward, centered, 248.83 mm above ground. -->
   <link name="laser"/>
   <joint name="laser_joint" type="fixed">
     <parent link="base_link"/><child link="laser"/>
     <!-- The scanner's +X direction faces the rear of the vehicle. -->
-    <origin xyz="0.008 0 0.192" rpy="0 0 ${pi}"/>
+    <origin xyz="0.03319 0 0.24883" rpy="0 0 ${pi}"/>
   </joint>
 
   <!-- Camera mounting reference is now on the robot centerline (y=0).

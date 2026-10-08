@@ -1,0 +1,45 @@
+/**:
+  ros__parameters:
+    general:
+      camera_timeout_sec: 3
+      camera_max_reconnect: 2
+      grab_resolution: 'VGA'
+      grab_frame_rate: 30
+      pub_resolution: 'NATIVE'
+      pub_frame_rate: 30.0
+    video:
+      # Publish both rectified eyes; launch lens:=left|right selects one.
+      publish_rgb: false
+      publish_left_right: true
+      publish_raw: false
+      publish_gray: false
+      publish_stereo: false
+      enable_24bit_output: true
+    depth:
+      # ZED VIO needs internal depth, while FlowNav only consumes RGB.
+      depth_mode: 'PERFORMANCE'
+      publish_depth_map: false
+      publish_depth_info: false
+      publish_point_cloud: false
+      publish_depth_confidence: false
+      publish_disparity: false
+    sensors:
+      publish_imu: true
+      publish_imu_raw: false
+      publish_cam_imu_transf: false
+      sensors_pub_rate: 100.0
+    pos_tracking:
+      pos_tracking_enabled: true
+      pos_tracking_mode: 'GEN_1'
+      map_frame: zed_map
+      odometry_frame: zed_odom
+      imu_fusion: true
+      publish_odom_pose: true
+      publish_pose_cov: false
+      publish_cam_path: false
+      publish_tf: false
+      publish_map_tf: false
+      area_memory: false
+      reset_odom_with_loop_closure: false
+    gnss_fusion:
+      gnss_fusion_enabled: false
