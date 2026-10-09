@@ -142,9 +142,9 @@ class BaseSafety(Node):
 
     def request_drive(self, source):
         if self.mode == 2:
-            # A fresh operator request also resets a driver lease that may
-            # have latched off while this node still reports drive mode.
-            self.stop(f'Rearming {source}: braking before drive')
+            if self.drive_source == source:
+                return
+            self.stop(f'Switching to {source}: braking before source change')
         # Leaving freewheel always passes through a braking, stationary state.
         if self.mode == 1 or self.pending_free is not None:
             self.stop('Leaving FREE: braking before drive')
