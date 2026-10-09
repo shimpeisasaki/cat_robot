@@ -27,7 +27,11 @@ def generate_launch_description():
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('navigation_button', default_value='0'),
         DeclareLaunchArgument('serial_number', default_value='10028118'),
+        DeclareLaunchArgument('log_level', default_value='warn',
+                              choices=['debug', 'info', 'warn', 'error', 'fatal']),
+        DeclareLaunchArgument('zed_log_level', default_value=LaunchConfiguration('log_level')),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
             share, 'config', 'robot.yaml'])),
         DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
@@ -37,59 +41,72 @@ def generate_launch_description():
                 LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
-                 Command(['xacro ', model]), value_type=str)}], output='screen'),
+                 Command(['xacro ', model]), value_type=str)}], output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]),
         Node(package='ddsm115_controller', executable='base_driver',
              name='base_driver', parameters=[robot_config, {
                  'require_safety_heartbeat': True,
                  'enable_motor_tools': ParameterValue(LaunchConfiguration('enable_motor_tools'), value_type=bool)}],
              output='screen', respawn=True, respawn_delay=2.0,
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              condition=IfCondition(LaunchConfiguration('use_base'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'odometry.launch.py'])),
-            launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items(),
+            launch_arguments={'odom_source': LaunchConfiguration('odom_source'),
+                              'log_level': LaunchConfiguration('log_level')}.items(),
             condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              parameters=[{'autorepeat_rate': 20.0}],
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='ddsm115_controller', executable='curvature_teleop',
              name='curvature_teleop', parameters=[manual_config], output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              remappings=[('/cmd_vel_teleop', '/cmd_vel_teleop_raw')],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='nav2_velocity_smoother', executable='velocity_smoother',
              name='velocity_smoother_manual', parameters=[manual_config], output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              remappings=[('cmd_vel', '/cmd_vel_teleop_raw'), ('cmd_vel_smoothed', '/cmd_vel_teleop')],
              condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
              name='manual_velocity_smoother_lifecycle_manager', output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              parameters=[{'autostart': True, 'node_names': ['velocity_smoother_manual']}],
              condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='cat_bringup', executable='base_safety', name='base_safety',
              parameters=[{
                  'enable_joystick': ParameterValue(LaunchConfiguration('enable_joystick'), value_type=bool),
+                 'navigation_button': ParameterValue(LaunchConfiguration('navigation_button'), value_type=int),
                  'require_navigation': ParameterValue(LaunchConfiguration('require_navigation'), value_type=bool)}],
-             output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
+             output='screen', condition=IfCondition(LaunchConfiguration('use_base')),
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'zed_sensors.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_zed')),
             launch_arguments={
                 'serial_number': LaunchConfiguration('serial_number'),
+                'zed_log_level': LaunchConfiguration('zed_log_level'),
                 'zed_config': LaunchConfiguration('zed_config'),
             }.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'rplidar_s1.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_lidar')),
-            launch_arguments={'serial_port': LaunchConfiguration('serial_port')}.items()),
+            launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
+                              'log_level': LaunchConfiguration('log_level')}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_gnss')),
             launch_arguments={'frame_id': 'gnss_antenna_link',
-                              'device_serial_string': LaunchConfiguration('gnss_serial')}.items()),
+                              'device_serial_string': LaunchConfiguration('gnss_serial'),
+                              'log_level': LaunchConfiguration('log_level')}.items()),
         Node(package='rviz2', executable='rviz2', output='screen',
              arguments=['-d', PathJoinSubstitution([
-                 share, 'rviz', 'experiment_robot.rviz'])],
+                 share, 'rviz', 'experiment_robot.rviz']),
+                 '--ros-args', '--log-level', LaunchConfiguration('log_level')],
              condition=IfCondition(LaunchConfiguration('rviz'))),
     ])

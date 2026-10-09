@@ -12,10 +12,13 @@ def generate_launch_description():
         DeclareLaunchArgument('ekf_output', default_value='/odom'),
         DeclareLaunchArgument('ekf_frame', default_value='odom'),
         DeclareLaunchArgument('ekf_publish_tf', default_value='true'),
+        DeclareLaunchArgument('log_level', default_value='warn'),
         Node(package='cat_bringup', executable='imu_guard', output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              parameters=[{'max_gyro_magnitude': 3.0}]),
         Node(package='robot_localization', executable='ekf_node',
              name='ekf_filter_node', output='screen',
+             arguments=['--ros-args', '--log-level', LaunchConfiguration('log_level')],
              parameters=[PathJoinSubstitution([
                  FindPackageShare('cat_bringup'), 'config', 'ekf.yaml']),
                  {'publish_tf': ParameterValue(LaunchConfiguration('ekf_publish_tf'), value_type=bool),

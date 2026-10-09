@@ -11,6 +11,7 @@ def generate_launch_description():
         # Select the ZED Mini permanently mounted on this robot.  A caller can
         # still override this argument when replacing the camera.
         DeclareLaunchArgument('serial_number', default_value='10028118'),
+        DeclareLaunchArgument('zed_log_level', default_value='warn'),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
             FindPackageShare('cat_bringup'), 'config', 'zed_sensors.yaml'])),
         # Run the wrapper as a child launch process. A camera disconnect makes
@@ -21,6 +22,8 @@ def generate_launch_description():
                 'ros2', 'launch', 'zed_wrapper', 'zed_camera.launch.py',
                 'camera_model:=zedm', 'camera_name:=zed',
                 'node_name:=zed_node',
+                PythonExpression([
+                    "'container_log_level:=' + '", LaunchConfiguration('zed_log_level'), "'"]),
                 PythonExpression([
                     "'serial_number:=' + '", LaunchConfiguration('serial_number'), "'"]),
                 'publish_urdf:=false', 'publish_tf:=false',
