@@ -188,6 +188,8 @@ public:
         create_publisher<std_msgs::msg::UInt8MultiArray>("/ddsm115/online_id", qos);
     }
     state_publisher_ = create_publisher<std_msgs::msg::UInt8>("/base/state", rclcpp::QoS(1));
+    drive_enabled_publisher_ = create_publisher<std_msgs::msg::Bool>(
+      "/base/drive_enabled", rclcpp::QoS(1));
     diagnostics_publisher_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 1);
     timer_ = create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(motor_update_period_),
@@ -379,6 +381,11 @@ private:
     std_msgs::msg::UInt8 state;
     state.data = healthy ? (stopped ? 3 : 1) : 0;  // bit 0: healthy, bit 1: stopped
     state_publisher_->publish(state);
+    std_msgs::msg::Bool drive_enabled;
+    drive_enabled.data = healthy && !brake_enabled_ && !freewheel_enabled_ &&
+      !motion_rearm_required_ &&
+      (!safety_required_ || safety_lease_->mode(std::chrono::steady_clock::now()) == 2);
+    drive_enabled_publisher_->publish(drive_enabled);
     if (update_start - last_diagnostics_ >= 1s) {
       diagnostic_msgs::msg::DiagnosticArray array;
       array.header.stamp = now();
@@ -445,6 +452,7 @@ private:
   bool motion_rearm_required_{true};
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr velocity_subscription_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr state_publisher_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr drive_enabled_publisher_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_publisher_;
   std::chrono::steady_clock::time_point last_diagnostics_{};
   std::vector<MotorChannel> channels_;

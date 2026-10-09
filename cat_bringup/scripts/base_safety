@@ -123,7 +123,10 @@ class BaseSafety(Node):
         self.output.publish(Twist())
         self.lease.publish(UInt8(data=0))
         if changed:
-            self.get_logger().warning('BRAKE: '+reason)
+            if reason == 'Operator brake service':
+                self.get_logger().info('BRAKE: '+reason)
+            else:
+                self.get_logger().warning('BRAKE: '+reason)
 
     def request_free(self):
         self.stop('Free requested: braking until wheel feedback confirms rest')
@@ -139,9 +142,9 @@ class BaseSafety(Node):
 
     def request_drive(self, source):
         if self.mode == 2:
-            if self.drive_source == source:
-                return
-            self.stop(f'Switching to {source}: braking before source change')
+            # A fresh operator request also resets a driver lease that may
+            # have latched off while this node still reports drive mode.
+            self.stop(f'Rearming {source}: braking before drive')
         # Leaving freewheel always passes through a braking, stationary state.
         if self.mode == 1 or self.pending_free is not None:
             self.stop('Leaving FREE: braking before drive')
