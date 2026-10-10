@@ -28,8 +28,8 @@
       publish_depth_confidence: false
       publish_disparity: false
     sensors:
-      # Use SDK bias-corrected gyro from data; EKF ignores orientation/acceleration.
-      publish_imu: true
+      # VIO uses the IMU inside the ZED SDK; no ROS IMU consumer in this profile.
+      publish_imu: false
       publish_imu_raw: false
       publish_cam_imu_transf: false
       publish_mag: false

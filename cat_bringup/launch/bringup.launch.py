@@ -27,7 +27,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
-        DeclareLaunchArgument('enable_panorama', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('enable_panorama', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('panorama_output_dir', default_value='~/ros2_ws/data/d1_vision'),
         DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
