@@ -35,8 +35,8 @@ class BaseSafety(Node):
         self.fresh = {}
         self.stamps = {}
         self.buttons = []
-        self.raw = {'navigation': Twist(), 'manual': Twist()}
-        self.last_command = {'navigation': -math.inf, 'manual': -math.inf}
+        self.raw = {source: Twist() for source in ('navigation', 'manual', 'panorama')}
+        self.last_command = {source: -math.inf for source in self.raw}
         self.armed_at = math.inf
         self.pending_free = None
         self.stopped_since = None
@@ -51,12 +51,15 @@ class BaseSafety(Node):
             Twist, '/cmd_vel_external', lambda msg: self.command('navigation', msg), 1)
         self.create_subscription(
             Twist, '/cmd_vel_teleop', lambda msg: self.command('manual', msg), 1)
+        self.create_subscription(
+            Twist, '/cmd_vel_panorama', lambda msg: self.command('panorama', msg), 1)
         self.create_subscription(Joy, '/joy', self.joy, qos_profile_sensor_data)
         self.create_subscription(UInt8, '/base/state', self.motor_state, 1)
         self.create_subscription(Bool, '/navigation/ready', self.navigation_state, 1)
         self.create_subscription(Bool, '/ddsm115/brake', self.external_brake, qos_profile_sensor_data)
         self.create_service(Trigger, '~/arm', self.arm)
         self.create_service(Trigger, '~/manual', self.manual_service)
+        self.create_service(Trigger, '~/panorama', self.panorama_service)
         self.create_service(Trigger, '~/brake', self.brake_service)
         self.create_service(Trigger, '~/free', self.free_service)
         self.create_timer(.05, self.tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
@@ -134,8 +137,11 @@ class BaseSafety(Node):
         self.drive_source = source
         self.pending_drive = None
         self.armed_at = time.monotonic()
-        self.reason = ('NAVIGATION: Nav2 command enabled' if source == 'navigation' else
-                       'MANUAL: X selected, right stick enabled')
+        self.reason = {
+            'navigation': 'NAVIGATION: Nav2 command enabled',
+            'manual': 'MANUAL: X selected, right stick enabled',
+            'panorama': 'PANORAMA: capture rotation enabled',
+        }[source]
 
     def request_drive(self, source):
         if self.mode == 2:
@@ -154,7 +160,8 @@ class BaseSafety(Node):
             return 'joy stale/missing'
         if now-self.fresh.get('motor', -math.inf) > .3 or not self.motor_healthy:
             return 'Motor feedback stale/fault'
-        for topic in ('/cmd_vel_safe', '/base_safety/mode', '/cmd_vel_teleop', '/cmd_vel_external'):
+        for topic in ('/cmd_vel_safe', '/base_safety/mode', '/cmd_vel_teleop',
+                      '/cmd_vel_external', '/cmd_vel_panorama'):
             if self.count_publishers(topic) > 1:
                 return 'Multiple command publishers: '+topic
         return None
@@ -198,6 +205,15 @@ class BaseSafety(Node):
         response.message = 'Manual drive requested'
         return response
 
+    def panorama_service(self, _, response):
+        if self.joystick and (not self.buttons or self.buttons[self.b] or self.buttons[self.y]):
+            response.message = 'Release joystick B/Y first'
+            return response
+        self.request_drive('panorama')
+        response.success = True
+        response.message = 'Panorama drive requested; waiting for stationary handover'
+        return response
+
     def brake_service(self, _, response):
         self.stop('Operator brake service')
         response.success = True
@@ -216,7 +232,7 @@ class BaseSafety(Node):
             self.stop('Safety timer stalled')
         self.last_tick = now
         if self.mode == 2:
-            manual = self.drive_source == 'manual'
+            manual = self.drive_source in ('manual', 'panorama')
             # Manual drive remains available for recovery when localization,
             # LiDAR, odometry, TF, or any Nav2 node is unavailable.
             issue = self.physical_problem() if manual else self.problem()
@@ -238,7 +254,7 @@ class BaseSafety(Node):
             if self.pending_free is not None and now-self.pending_free > 3:
                 self.stop('Free rejected: wheels did not stop')
         if self.mode != 2:
-            pending_manual = self.pending_drive == 'manual'
+            pending_manual = self.pending_drive in ('manual', 'panorama')
             healthy = ((self.physical_problem() if pending_manual else self.problem()) is None and
                        self.stationary)
             self.ready_since = (self.ready_since or now) if healthy else None

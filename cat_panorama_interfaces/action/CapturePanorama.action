@@ -1,0 +1,9 @@
+# Set to 0 to use the node's configured frame count.
+uint8 frames
+---
+bool success
+string path
+string message
+---
+uint8 frames_captured
+float32 degrees_turned

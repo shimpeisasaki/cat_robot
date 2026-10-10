@@ -13,7 +13,7 @@
       pub_frame_rate: 30.0
       grab_compute_capping_fps: 0.0
     video:
-      publish_rgb: false
+      publish_rgb: true
       publish_left_right: false
       publish_raw: false
       publish_gray: false

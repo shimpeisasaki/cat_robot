@@ -13,7 +13,7 @@ import termios
 import time
 
 CHANNELS = [
-    ('left', '/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06', 2),
+    ('left', '/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if00', 2),
     ('right', '/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04', 1),
 ]
 

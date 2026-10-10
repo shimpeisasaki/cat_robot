@@ -21,8 +21,8 @@ def subject():
     now = time.monotonic()
     obj = NS(mode=0, reason='', pending_free=None, pending_drive=None, stopped_since=None,
              ready_since=now-3, armed_at=math.inf, drive_source='navigation',
-             raw={'navigation': Twist(), 'manual': Twist()},
-             last_command={'navigation': -math.inf, 'manual': -math.inf},
+             raw={'navigation': Twist(), 'manual': Twist(), 'panorama': Twist()},
+             last_command={source: -math.inf for source in ('navigation', 'manual', 'panorama')},
              a=0, b=1, x=2, y=3, buttons=[0]*11,
              output=Mock(), lease=Mock(), status=Mock(),
              get_logger=Mock(), problem=lambda **kwargs: None, physical_problem=lambda: None,
@@ -168,3 +168,20 @@ def test_free_to_drive_request_brakes_then_arms_when_stationary():
     obj.ready_since = time.monotonic()-3
     Safety.tick(obj)
     assert obj.mode == 2 and obj.drive_source == 'navigation'
+
+
+def test_panorama_handover_brakes_manual_and_ignores_navigation_fault():
+    obj = subject()
+    obj.mode = 2
+    obj.drive_source = 'manual'
+    reply = Safety.panorama_service(obj, None, NS(success=False, message=''))
+    assert reply.success and obj.mode == 0 and obj.pending_drive == 'panorama'
+    assert obj.output.publish.call_args.args[0].linear.x == 0
+    obj.problem = lambda: 'Navigation unavailable'
+    obj.ready_since = time.monotonic() - 3
+    Safety.tick(obj)
+    assert obj.mode == 2 and obj.drive_source == 'panorama'
+    command = Twist(); command.angular.z = .2
+    Safety.command(obj, 'panorama', command)
+    Safety.tick(obj)
+    assert obj.output.publish.call_args.args[0].angular.z == .2

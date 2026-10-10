@@ -27,6 +27,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('enable_panorama', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
             share, 'config', 'robot.yaml'])),
@@ -69,6 +70,19 @@ def generate_launch_description():
                  'enable_joystick': ParameterValue(LaunchConfiguration('enable_joystick'), value_type=bool),
                  'require_navigation': ParameterValue(LaunchConfiguration('require_navigation'), value_type=bool)}],
              output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
+        Node(package='cat_panorama', executable='panorama_capture',
+             name='panorama_capture', output='screen',
+             additional_env={'PYTHONNOUSERSITE': '1'},
+             condition=IfCondition(PythonExpression([
+                 "'", LaunchConfiguration('enable_panorama'), "' == 'true' and '",
+                 LaunchConfiguration('use_base'), "' == 'true' and '",
+                 LaunchConfiguration('use_zed'), "' == 'true'"]))),
+        Node(package='cat_panorama', executable='panorama_rotate',
+             name='panorama_rotate', output='screen',
+             condition=IfCondition(PythonExpression([
+                 "'", LaunchConfiguration('enable_panorama'), "' == 'true' and '",
+                 LaunchConfiguration('use_base'), "' == 'true' and '",
+                 LaunchConfiguration('use_zed'), "' == 'true'"]))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'zed_sensors.launch.py'])),

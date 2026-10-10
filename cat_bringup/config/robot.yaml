@@ -1,7 +1,7 @@
 # Single source of machine geometry and serial settings.
 base_driver:
   ros__parameters:
-    left_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06
+    left_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if00
     right_usb_dev: /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04
     left_motor_id: 2
     right_motor_id: 1
