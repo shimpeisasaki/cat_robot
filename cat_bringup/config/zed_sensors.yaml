@@ -1,6 +1,6 @@
 /**:
   ros__parameters:
-    # Low-compute profile for wheel odometry + calibrated gyro fusion and VLM input.
+    # Wheel odometry + calibrated gyro fusion, with RGB/depth capture available.
     # ZED Mini VGA is 672x376 per eye; use its lowest native 15 fps mode.
     general:
       # Fail a missing/disconnected camera promptly so zed_sensors.launch.py
@@ -20,9 +20,9 @@
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # Disables stereo depth, depth images, and colored point clouds.
-      depth_mode: 'NONE'
-      publish_depth_map: false
+      # Compute stereo depth for RGB/depth capture without ZED positional tracking.
+      depth_mode: 'PERFORMANCE'
+      publish_depth_map: true
       publish_depth_info: false
       publish_point_cloud: false
       publish_depth_confidence: false

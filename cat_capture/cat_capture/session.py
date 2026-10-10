@@ -1,15 +1,18 @@
-"""Save ordered RGB frames without generating a stitched panorama."""
+"""Save ordered RGB/depth pairs without generating a stitched panorama."""
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import cv2
+import numpy as np
 
 
 class CaptureSession:
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, angle_deg, frames):
         root = Path(output_dir).expanduser().resolve()
-        name = datetime.now(ZoneInfo('Asia/Tokyo')).strftime('panorama_%m%d_%H%M_%S')
+        angle = f'{angle_deg:g}'
+        name = datetime.now(ZoneInfo('Asia/Tokyo')).strftime('%m%d_%H:%M')
+        name = f'{name}_{angle}_{frames}'
         root.mkdir(parents=True, exist_ok=True)
         for suffix in range(100):
             self.path = root / (name if suffix == 0 else f'{name}_{suffix:02d}')
@@ -22,14 +25,15 @@ class CaptureSession:
             raise FileExistsError(f'Too many capture sessions at {name}')
         self.frames = []
 
-    def capture(self, bgr, angle_degrees):
-        angle = int(angle_degrees)
-        if not -180 <= angle < 180:
-            raise ValueError('Frame angle must be in [-180, 180) degrees')
-        path = self.path / f'f{len(self.frames):02d}_{angle % 360:03d}.png'
-        if not cv2.imwrite(str(path), bgr):
-            raise OSError(f'Could not save {path}')
-        self.frames.append(path)
+    def capture(self, bgr, depth):
+        stem = f'f{len(self.frames):02d}'
+        rgb_path = self.path / f'{stem}_rgb.png'
+        depth_path = self.path / f'{stem}_depth.npy'
+        np.save(depth_path, depth, allow_pickle=False)
+        if not cv2.imwrite(str(rgb_path), bgr):
+            depth_path.unlink(missing_ok=True)
+            raise OSError(f'Could not save {rgb_path}')
+        self.frames.append((rgb_path, depth_path))
         return len(self.frames)
 
     def finish(self):

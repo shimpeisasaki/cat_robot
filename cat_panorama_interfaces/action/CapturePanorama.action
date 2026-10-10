@@ -1,5 +1,7 @@
 # Set to 0 to use the node's configured frame count.
 uint8 frames
+# Set to 0 for a full 360-degree turn. Otherwise capture this centered arc in degrees.
+float32 angle_deg
 ---
 bool success
 string path

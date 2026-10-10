@@ -12,6 +12,7 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
 from rclpy.task import Future
 from cat_panorama_interfaces.action import CapturePanorama
+from cat_panorama_interfaces.srv import StartCapture
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Joy
@@ -22,7 +23,7 @@ from std_srvs.srv import Trigger
 class PanoramaRotate(Node):
     def __init__(self):
         super().__init__('panorama_rotate')
-        self.frames = int(self.declare_parameter('frames', 12).value)
+        self.frames = int(self.declare_parameter('frames', 24).value)
         self.default_frames = self.frames
         requested_speed = float(self.declare_parameter('angular_speed', 0.26).value)
         self.speed = min(requested_speed, 0.26)
@@ -38,9 +39,10 @@ class PanoramaRotate(Node):
         self.create_subscription(String, '/panorama_capture/status', self.on_capture, 1)
         self.service_clients = {name: self.create_client(Trigger, service) for name, service in {
             'panorama': '/base_safety/panorama', 'brake': '/base_safety/brake',
-            'start': '/panorama_capture/start', 'capture': '/panorama_capture/capture',
+            'capture': '/panorama_capture/capture',
             'finish': '/panorama_capture/finish', 'cancel': '/panorama_capture/cancel',
         }.items()}
+        self.service_clients['start'] = self.create_client(StartCapture, '/panorama_capture/start')
         self.state = 'idle'
         self.action_server = ActionServer(
             self, CapturePanorama, '/panorama/capture', self.execute_goal,
@@ -70,6 +72,9 @@ class PanoramaRotate(Node):
         self.capture_at = 0.0
         self.frame_count = 0
         self.target = 2 * math.pi
+        self.angle_deg = 360.0
+        self.centered = False
+        self.half_angle = 0.0
         self.phase_at = 0.0
         self.stationary_since = None
         self.session_active = False
@@ -94,7 +99,8 @@ class PanoramaRotate(Node):
     def accept_goal(self, request):
         if self.state != 'idle' or self.goal_reserved or self.action_goal is not None:
             return GoalResponse.REJECT
-        if request.frames != 0 and request.frames < 3:
+        if (request.frames != 0 and request.frames < 3) or not math.isfinite(request.angle_deg) or (
+                request.angle_deg < 0 or request.angle_deg > 360):
             return GoalResponse.REJECT
         self.goal_reserved = True
         return GoalResponse.ACCEPT
@@ -105,7 +111,8 @@ class PanoramaRotate(Node):
     async def execute_goal(self, goal_handle):
         self.action_goal = goal_handle
         self.action_future = Future()
-        self.begin(goal_handle.request.frames or self.default_frames)
+        self.begin(goal_handle.request.frames or self.default_frames,
+                   goal_handle.request.angle_deg)
         outcome, path, message = await self.action_future
         result = CapturePanorama.Result()
         result.success, result.path, result.message = outcome == 'success', path, message
@@ -161,9 +168,13 @@ class PanoramaRotate(Node):
         except (ValueError, TypeError):
             self.capture_status = {}
 
-    def begin(self, frames=None):
+    def begin(self, frames=None, angle_deg=0.0):
         self.frames = frames or self.default_frames
-        self.step = 2 * math.pi / self.frames
+        self.centered = angle_deg > 0
+        self.angle_deg = angle_deg if self.centered else 360.0
+        self.target = math.radians(self.angle_deg)
+        self.half_angle = self.target / 2 if self.centered else 0.0
+        self.step = self.target / self.frames
         self.state = 'waiting'
         self.started_at = time.monotonic()
         self.last_heading_yaw = None
@@ -193,7 +204,11 @@ class PanoramaRotate(Node):
         client = self.service_clients[name]
         if not client.service_is_ready():
             return False
-        self.pending = (name, client.call_async(Trigger.Request()), time.monotonic())
+        request = StartCapture.Request() if name == 'start' else Trigger.Request()
+        if name == 'start':
+            request.angle_deg = self.angle_deg
+            request.frames = self.frames
+        self.pending = (name, client.call_async(request), time.monotonic())
         return True
 
     def poll_service(self):
@@ -232,8 +247,8 @@ class PanoramaRotate(Node):
         now = time.monotonic()
         if name == 'start':
             self.session_active = True
-            self.result_path = reply.message
-            self.state, self.phase_at = 'scan', now
+            self.result_path = reply.path
+            self.state, self.phase_at = ('prepare' if self.centered else 'scan'), now
             self.last_heading_yaw = self.odom_yaw
             self.heading = 0.0
             self.capture_status = {'state': 'recording', 'frames': 0}
@@ -276,7 +291,7 @@ class PanoramaRotate(Node):
         self.poll_service()
         if self.state == 'idle':
             return
-        if self.state != 'scan':
+        if self.state not in ('prepare', 'scan', 'return'):
             self.zero()
         if self.state == 'brake_request':
             if self.pending is None and not self.call('brake') and now - self.phase_at > 5:
@@ -296,7 +311,7 @@ class PanoramaRotate(Node):
             return
         if self.state == 'waiting':
             if now - self.started_at > 60:
-                self.abort('Motor, VIO or RGB did not become ready within 60 s')
+                self.abort('Motor, VIO or RGB/depth did not become ready within 60 s')
                 return
             if not self.drive_requested and self.pending is None and self.call('panorama'):
                 self.drive_requested = True
@@ -328,31 +343,70 @@ class PanoramaRotate(Node):
             self.abort('Odometry is stale')
             return
         if self.capture_status.get('state') in ('error', 'cancelled'):
-            self.abort(self.capture_status.get('error') or 'RGB capture failed')
+            self.abort(self.capture_status.get('error') or 'RGB/depth capture failed')
+            return
+        tolerance = min(math.radians(2), self.step / 4)
+        if self.state == 'prepare':
+            remaining = self.heading + self.half_angle
+            if remaining <= tolerance:
+                self.zero()
+                self.state, self.phase_at = 'prepare_settle', now
+                self.stationary_since = None
+            elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
+                self.abort('Timed out turning to capture start')
+            else:
+                command = Twist()
+                command.angular.z = -min(self.speed, max(0.06, remaining * 0.8))
+                self.cmd.publish(command)
+            return
+        if self.state in ('prepare_settle', 'scan_settle'):
+            self.stationary_since = (self.stationary_since or now) if self.stationary else None
+            if now - self.phase_at > 10:
+                self.abort('Timed out waiting for wheels to stop before reversing')
+            elif self.stationary_since is not None and now - self.stationary_since >= 0.5:
+                self.state, self.phase_at = (
+                    'scan' if self.state == 'prepare_settle' else 'return'), now
+                self.stationary_since = None
             return
         if self.state == 'scan':
             if self.action_goal:
                 feedback = CapturePanorama.Feedback()
                 feedback.frames_captured = self.frame_count
-                feedback.degrees_turned = math.degrees(self.heading)
+                feedback.degrees_turned = math.degrees(self.heading + self.half_angle)
                 self.action_goal.publish_feedback(feedback)
-            remaining = self.target - self.heading
-            if remaining <= math.radians(2):
+            scan_end = self.half_angle if self.centered else self.target
+            remaining = scan_end - self.heading
+            if remaining <= tolerance:
                 self.zero()
-                self.state, self.phase_at = 'finish_settle', now
+                self.state, self.phase_at = (
+                    'scan_settle' if self.centered else 'finish_settle'), now
                 self.stationary_since = None
             elif (self.frame_count < self.frames and
-                  self.heading >= (self.frame_count + 1.5) * self.step):
+                  self.heading >= -self.half_angle + (self.frame_count + 1.5) * self.step):
                 self.abort('Missed a capture angle')
             elif now - self.phase_at > max(40, 2 * self.target / self.speed + 10):
                 self.abort(f'Turn timed out: {math.degrees(remaining):.1f} deg remaining')
             else:
                 command = Twist()
-                command.angular.z = min(self.speed, max(0.18, remaining * 0.8))
+                command.angular.z = min(self.speed, max(0.06, remaining * 0.8))
                 self.cmd.publish(command)
                 if (self.pending is None and self.frame_count < self.frames and
-                        self.heading >= (self.frame_count + 0.5) * self.step):
+                        self.heading >= -self.half_angle + (self.frame_count + 0.5) * self.step):
                     self.call('capture')
+            return
+        if self.state == 'return':
+            if self.frame_count < self.frames and self.pending is None:
+                self.abort('Scan ended before all capture requests completed')
+            elif self.heading <= tolerance:
+                self.zero()
+                self.state, self.phase_at = 'finish_settle', now
+                self.stationary_since = None
+            elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
+                self.abort('Timed out returning to starting heading')
+            else:
+                command = Twist()
+                command.angular.z = -min(self.speed, max(0.06, self.heading * 0.8))
+                self.cmd.publish(command)
             return
         if self.state == 'finish_settle':
             self.stationary_since = (self.stationary_since or now) if self.stationary else None

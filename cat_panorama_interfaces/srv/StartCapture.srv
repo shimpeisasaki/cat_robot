@@ -1,0 +1,6 @@
+float32 angle_deg
+uint8 frames
+---
+bool success
+string path
+string message

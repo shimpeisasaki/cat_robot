@@ -20,9 +20,9 @@
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # GEN_1 tracking requires depth processing; avoid publishing dense outputs.
+      # GEN_1 tracking requires depth processing; publish depth for paired capture.
       depth_mode: 'PERFORMANCE'
-      publish_depth_map: false
+      publish_depth_map: true
       publish_depth_info: false
       publish_point_cloud: false
       publish_depth_confidence: false

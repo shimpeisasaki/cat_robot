@@ -1,6 +1,6 @@
 # cat_capture
 
-機体を一周旋回させ、ZEDのRGB画像を指定枚数だけ保存するROS 2アクションです。画像合成は行いません。このパッケージとアクション定義 `cat_panorama_interfaces` は `cat_robot` リポジトリに含まれ、旧 `cat_panorama` は不要です。
+機体を旋回させ、ZEDのRGB画像と対応する深度配列を指定枚数だけ保存するROS 2アクションです。画像合成は行いません。このパッケージとアクション定義 `cat_panorama_interfaces` は `cat_robot` リポジトリに含まれます。
 
 ## 起動と操作
 
@@ -10,17 +10,20 @@
 ros2 launch cat_bringup bringup.launch.py enable_panorama:=true
 ```
 
-Xで手動モードにした後、RB（既定のボタン番号5）を押すと停止し、2秒の静止確認後に旋回撮影します。終了後はブレーキモードです。B/X/Yで中止できます。外部ノードからも同じ撮影を要求できます。
+Xで手動モードにした後、RB（既定のボタン番号5）を押すと停止し、2秒の静止確認後に360度・24枚の旋回撮影をします。終了後はブレーキモードです。B/X/Yで中止できます。外部ノードからは角度と枚数も指定できます。
 
 ```bash
 ros2 action send_goal /panorama/capture \
-  cat_panorama_interfaces/action/CapturePanorama '{frames: 0}' --feedback
+  cat_panorama_interfaces/action/CapturePanorama '{frames: 0, angle_deg: 0.0}' --feedback
+
+ros2 action send_goal /panorama/capture \
+  cat_panorama_interfaces/action/CapturePanorama '{frames: 10, angle_deg: 120.0}' --feedback
 ```
 
-`frames: 0` は設定枚数の12枚、3～255は今回だけの枚数です。結果の `path` は保存先ディレクトリです。同時に実行できるアクションは1件です。
+`frames: 0` は設定枚数の24枚、`angle_deg: 0` は360度撮影です。`angle_deg` を指定した場合、開始時の向きを中心に、右へ半分の角度だけ旋回してから左へ指定角度を撮影し、最後に開始時の向きへ戻ります。方向を反転する前には減速・停止し、車輪の停止フィードバックを0.5秒確認します。例えば120度・10枚なら各12度区間の中央で撮影します。`frames` は3～255、`angle_deg` は0より大きく360以下です。結果の `path` は保存先ディレクトリです。同時に実行できるアクションは1件です。
 
 ## 保存先と依存関係
 
-既定の保存先は `~/ros2_ws/data/panorama/panorama_mmdd_hhmm_ss/` です。`f00_017.png` のような撮影順・角度付きファイルを保存します。`panorama.png` は生成しません。保存先はlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
+既定の保存先は `~/ros2_ws/data/d1_vision/mmdd_hh:mm_角度_枚数/` です。同じ撮影番号で `f00_rgb.png` と `f00_depth.npy` を保存します。深度はメートル単位のfloat32配列です。同じ時刻のRGBと深度が得られなければ撮影を失敗として扱います。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
 
-`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/status` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/rect/image` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
+`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/status` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/rect/image` と `/zed/zed_node/depth/depth_registered` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。

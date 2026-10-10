@@ -1,18 +1,18 @@
-"""Capture RGB images at requested angles and save them as a session."""
+"""Capture matching RGB/depth frames and save them as a session."""
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 import json
-import math
 from pathlib import Path
 import time
 
 from cv_bridge import CvBridge
+import numpy as np
 import rclpy
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
-from nav_msgs.msg import Odometry
+from cat_panorama_interfaces.srv import StartCapture
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -24,16 +24,16 @@ class PanoramaCapture(Node):
     def __init__(self, **kwargs):
         super().__init__('panorama_capture', **kwargs)
         param = lambda name, default: self.declare_parameter(name, default).value
-        self.output_dir = param('output_dir', str(Path.home() / 'ros2_ws/data/panorama'))
+        self.output_dir = param('output_dir', str(Path.home() / 'ros2_ws/data/d1_vision'))
         self.input_timeout = float(param('input_timeout', .75))
         self.capture_timeout = float(param('capture_timeout', 10.))
         rgb_topic = param('rgb_topic', '/zed/zed_node/rgb/color/rect/image')
+        depth_topic = param('depth_topic', '/zed/zed_node/depth/depth_registered')
         self.bridge = CvBridge()
-        self.latest = None
-        self.latest_at = 0.0
-        self.last_input_ns = 0
-        self.odometry = deque(maxlen=120)
-        self.odom_at = 0.0
+        self.rgb_frames = {}
+        self.depth_frames = {}
+        self.rgb_at = 0.0
+        self.depth_at = 0.0
         self.session = None
         self.frames = 0
         self.state = 'idle'
@@ -43,60 +43,50 @@ class PanoramaCapture(Node):
         self.jobs = deque()
         self.cancel_reason = None
         self.create_subscription(Image, rgb_topic, self.receive_image, qos_profile_sensor_data)
-        self.create_subscription(Odometry, '/odom', self.receive_odom, qos_profile_sensor_data)
+        self.create_subscription(Image, depth_topic, self.receive_depth, qos_profile_sensor_data)
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status = self.create_publisher(String, '~/status', qos)
-        for name in ('start', 'capture', 'finish', 'cancel'):
+        self.create_service(StartCapture, '~/start', self.start)
+        for name in ('capture', 'finish', 'cancel'):
             self.create_service(Trigger, '~/' + name, getattr(self, name))
         self.create_timer(.05, self.tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
-        self.get_logger().info(f'RGB panorama capture ready; output: {self.output_dir}')
+        self.get_logger().info(f'RGB/depth capture ready; output: {self.output_dir}')
+
+    @staticmethod
+    def remember(frames, msg):
+        stamp = Time.from_msg(msg.header.stamp).nanoseconds
+        if stamp <= 0:
+            return False
+        frames[stamp] = msg
+        while len(frames) > 30:
+            frames.pop(next(iter(frames)))
+        return True
 
     def receive_image(self, msg):
-        stamp = Time.from_msg(msg.header.stamp).nanoseconds
-        age = (self.get_clock().now().nanoseconds - stamp) * 1e-9
-        if stamp <= self.last_input_ns or not -.1 <= age <= self.input_timeout:
-            return
-        self.last_input_ns = stamp
-        self.latest = (msg, stamp)
-        self.latest_at = time.monotonic()
+        if self.remember(self.rgb_frames, msg):
+            self.rgb_at = time.monotonic()
 
-    def receive_odom(self, msg):
-        q = msg.pose.pose.orientation
-        if not all(math.isfinite(value) for value in (q.x, q.y, q.z, q.w)):
-            return
-        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
-                         1 - 2 * (q.y * q.y + q.z * q.z))
-        self.odometry.append((Time.from_msg(msg.header.stamp).nanoseconds, yaw))
-        self.odom_at = time.monotonic()
-
-    def angle_for(self, image_stamp):
-        if not self.odometry:
-            return None
-        stamp, yaw = min(self.odometry, key=lambda item: abs(item[0] - image_stamp))
-        if abs(stamp - image_stamp) > 150_000_000:
-            return None
-        degrees = round(math.degrees(yaw))
-        return (degrees + 180) % 360 - 180
+    def receive_depth(self, msg):
+        if self.remember(self.depth_frames, msg):
+            self.depth_at = time.monotonic()
 
     def ready(self):
-        if self.latest is None:
-            return False
-        age = (self.get_clock().now().nanoseconds - self.latest[1]) * 1e-9
-        return (-.1 <= age <= self.input_timeout and
-                time.monotonic() - self.latest_at <= self.input_timeout and
-                time.monotonic() - self.odom_at <= self.input_timeout)
+        return (bool(self.rgb_frames.keys() & self.depth_frames.keys()) and
+                time.monotonic() - self.rgb_at <= self.input_timeout and
+                time.monotonic() - self.depth_at <= self.input_timeout)
 
-    def start(self, _, response):
+    def start(self, request, response):
         if self.state in ('recording', 'finishing', 'cancelling') or self.jobs:
             response.message = 'A panorama session is already active'
         elif not self.ready():
-            response.message = 'RGB image or /odom is stale'
+            response.message = 'RGB or depth image is stale'
         else:
             try:
-                self.session = CaptureSession(self.output_dir)
+                self.session = CaptureSession(self.output_dir, request.angle_deg, request.frames)
                 self.frames, self.error, self.cancel_reason = 0, '', None
                 self.state = 'recording'
-                response.success, response.message = True, str(self.session.path)
+                response.success, response.path = True, str(self.session.path)
+                response.message = 'Session started'
             except Exception as exc:
                 response.message = str(exc)
         return response
@@ -106,12 +96,18 @@ class PanoramaCapture(Node):
             response.message = 'Session is not ready for another frame'
         else:
             self.pending_capture = (self.get_clock().now().nanoseconds, time.monotonic(), None)
-            response.success, response.message = True, 'Waiting for RGB frame and image-time odometry'
+            response.success, response.message = True, 'Waiting for matching RGB and depth frames'
         return response
 
-    def save_frame(self, frame, angle):
-        image = self.bridge.imgmsg_to_cv2(frame[0], desired_encoding='bgr8').copy()
-        return self.session.capture(image, angle)
+    def save_frame(self, rgb, depth):
+        if depth.encoding.upper() != '32FC1':
+            raise ValueError(f'Expected depth in meters as 32FC1, got {depth.encoding}')
+        image = self.bridge.imgmsg_to_cv2(rgb, desired_encoding='bgr8').copy()
+        distances = np.asarray(self.bridge.imgmsg_to_cv2(depth, desired_encoding='passthrough'),
+                               dtype=np.float32).copy()
+        if distances.shape != image.shape[:2]:
+            raise ValueError('RGB and depth dimensions differ')
+        return self.session.capture(image, distances)
 
     def finish(self, _, response):
         if self.state != 'recording' or self.pending_capture:
@@ -120,7 +116,7 @@ class PanoramaCapture(Node):
             self.state = 'finishing'
             self.jobs.append(('finish', self.pool.submit(self.session.finish)))
             response.success = True
-            response.message = 'Saving RGB frames'
+            response.message = 'Saving RGB/depth frames'
         return response
 
     def cancel(self, _, response):
@@ -159,24 +155,23 @@ class PanoramaCapture(Node):
             min_stamp, requested_at, candidate = self.pending_capture
             if time.monotonic() - requested_at > self.capture_timeout:
                 self.pending_capture = None
-                self.error = 'Timed out waiting for RGB frame and image-time /odom'
+                self.error = 'Timed out waiting for matching RGB and depth frames'
                 self.state = 'error'
                 self.cancel_reason = self.error
             else:
-                if candidate is None and self.ready() and self.latest[1] >= min_stamp:
-                    candidate = self.latest
-                    self.pending_capture = (min_stamp, requested_at, candidate)
+                if candidate is None and self.ready():
+                    stamps = self.rgb_frames.keys() & self.depth_frames.keys()
+                    stamp = min((stamp for stamp in stamps if stamp >= min_stamp), default=None)
+                    if stamp is not None:
+                        candidate = (self.rgb_frames[stamp], self.depth_frames[stamp])
                 if candidate is not None:
-                    angle = self.angle_for(candidate[1])
-                    if angle is not None:
-                        self.jobs.append(('capture', self.pool.submit(self.save_frame, candidate, angle)))
-                        self.pending_capture = None
+                    self.jobs.append(('capture', self.pool.submit(self.save_frame, *candidate)))
+                    self.pending_capture = None
         ready = self.ready()
         self.status.publish(String(data=json.dumps({
             'state': self.state, 'ready': ready, 'frames': self.frames,
             'path': str(self.session.path) if self.session else '',
-            'error': self.error, 'waiting_for': 'RGB image or /odom is stale' if not ready else '',
-            'input_stamp_ns': self.latest[1] if self.latest else 0,
+            'error': self.error, 'waiting_for': 'RGB or depth image is stale' if not ready else '',
         })))
 
     def close(self):
