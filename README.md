@@ -1,6 +1,6 @@
 # CATロボット 機体運用マニュアル
 
-`cat_robot` はモーター、LiDAR、ZED、任意のGNSS、機体モデル、オドメトリ、手動操作、安全停止を管理する。Nav2、SLAM、自己位置推定、waypoint巡回は [experiment_cat](https://github.com/shimpeisasaki/experiment_cat) が管理する。`experiment_cat` の起動時には本パッケージの機体起動も含まれるため、`cat_bringup` を別途起動しない。
+`cat_robot` はモーター、LiDAR、ZED、任意のGNSS、機体モデル、オドメトリ、手動操作、安全停止、任意の画像撮影を管理する。Nav2、SLAM、自己位置推定、waypoint巡回は [experiment_cat](https://github.com/shimpeisasaki/experiment_cat) が管理する。`experiment_cat` の起動時には本パッケージの機体起動も含まれるため、`cat_bringup` を別途起動しない。
 
 ## 新規PCへの導入
 
@@ -49,6 +49,12 @@ Nav2やSLAMを使わずに、センサと手動操作を起動する場合に使
 ros2 launch cat_bringup bringup.launch.py
 ```
 
+画像撮影は既定で無効である。12方向の画像が必要なときだけ `enable_panorama:=true` を付ける。撮影後の合成画像は生成しない。操作と保存形式は [cat_capture/README.md](cat_capture/README.md) を参照する。
+
+```bash
+ros2 launch cat_bringup bringup.launch.py enable_panorama:=true
+```
+
 主な起動引数は次のとおりである。
 
 | 引数 | 既定値 | 用途 |
@@ -59,14 +65,14 @@ ros2 launch cat_bringup bringup.launch.py
 | `serial_port` | `/dev/rplidar` | LiDARのシリアルポート |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
 | `enable_joystick`, `rviz` | `true` | 操作入力と表示 |
-| `enable_panorama` | `true` | ZED RGBを使うパノラマ撮影アクション |
+| `enable_panorama` | `false` | 12方向のRGB画像を保存する撮影アクション。画像合成は行わない |
 | `robot_config` | パッケージ内の `robot.yaml` | 機体設定ファイル |
 
 ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
 
 ## 操作と停止
 
-起動時は停止モードである。ジョイスティックの割当ては、Xが手動、Aが外部指令、Bが停止、Yが停止確認後のフリーである。手動モード中のRBはパノラマ撮影を開始する。手動走行には右スティックを使用する。モードの切替時と通信異常時は停止モードに戻る。復旧後に自動で走行を再開しない。撮影後も停止モードになるため、再び手動で走るにはXを押す。
+起動時は停止モードである。ジョイスティックの割当ては、Xが手動、Aが外部指令、Bが停止、Yが停止確認後のフリーである。`enable_panorama:=true` で起動した場合、手動モード中のRBは12方向の画像撮影を開始する。画像は `~/ros2_ws/data/panorama` に保存し、合成しない。手動走行には右スティックを使用する。モードの切替時と通信異常時は停止モードに戻る。復旧後に自動で走行を再開しない。撮影後も停止モードになるため、再び手動で走るにはXを押す。
 
 外部指令による走行を許可する場合は、停止状態とセンサ・モーター状態を確認してから次のサービスを使用する。`arm` は走行許可のみを行い、ゴールや速度指令は生成しない。
 
