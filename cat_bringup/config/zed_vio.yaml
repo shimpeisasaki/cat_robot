@@ -23,9 +23,10 @@
     depth:
       # GEN_1 tracking and point cloud require stereo depth processing.
       depth_mode: 'PERFORMANCE'
-      # Lower values reject less reliable stereo matches (SDK defaults: 95/100).
-      depth_confidence: 90
-      depth_texture_conf: 90
+      # Keep the ZED wrapper's depth confidence defaults; tighter filtering
+      # removed too many floor points in the local costmap.
+      depth_confidence: 95
+      depth_texture_conf: 100
       publish_depth_map: false
       publish_depth_info: false
       point_cloud_freq: 10.0
