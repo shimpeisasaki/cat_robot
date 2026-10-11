@@ -82,15 +82,15 @@
     <origin xyz="0.03319 0 0.24883" rpy="0 0 ${pi}"/>
   </joint>
 
-  <!-- Camera mounting reference is now on the robot centerline (y=0).
-       Previous longitudinal position and mounting height are retained. -->
+  <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.
+       Positive pitch tips the forward-facing camera down by 12 degrees. -->
   <xacro:include filename="$(find zed_description)/urdf/zed_macro.urdf.xacro"/>
   <xacro:zed_camera name="zed" model="zedm" enable_gnss="false">
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:zed_camera>
   <joint name="zed_mount_joint" type="fixed">
     <parent link="base_link"/><child link="zed_camera_link"/>
-    <origin xyz="-0.270 0 0.54675" rpy="0 0 0"/>
+    <origin xyz="-0.285 0 0.550" rpy="0 ${12*pi/180} 0"/>
   </joint>
 
   <!-- GNSS link origin is the user-provided antenna reference point. -->
