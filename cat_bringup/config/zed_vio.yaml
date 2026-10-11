@@ -14,6 +14,7 @@
       grab_compute_capping_fps: 0.0
     video:
       publish_rgb: true
+      publish_compressed: false
       publish_left_right: false
       publish_raw: false
       publish_gray: false
