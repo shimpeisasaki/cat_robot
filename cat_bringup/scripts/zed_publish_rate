@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep ZED RGB/depth publishing at 10 Hz in manual and freewheel modes."""
+"""Keep ZED RGB publishing at 10 Hz in manual and freewheel modes."""
 
 import time
 
@@ -57,7 +57,7 @@ class ZedPublishRate(Node):
         self.pending = self.client.call_async(request)
         self.sent_rate = rate
         self.sent_at = now
-        self.get_logger().info(f'ZED RGB/depth publish rate requested: {rate:g} Hz')
+        self.get_logger().info(f'ZED RGB publish rate requested: {rate:g} Hz')
 
 
 def main():

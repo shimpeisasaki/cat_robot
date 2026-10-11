@@ -49,11 +49,7 @@ Nav2やSLAMを使わずに、センサと手動操作を起動する場合に使
 ros2 launch cat_bringup bringup.launch.py
 ```
 
-画像撮影は既定で無効である。12方向の画像が必要なときだけ `enable_panorama:=true` を付ける。撮影後の合成画像は生成しない。操作と保存形式は [cat_capture/README.md](cat_capture/README.md) を参照する。
-
-```bash
-ros2 launch cat_bringup bringup.launch.py enable_panorama:=true
-```
+旋回撮影は既定で有効である。RGB画像と同時刻の点群を24方向分保存し、画像合成は行わない。操作と保存形式は [cat_capture/README.md](cat_capture/README.md) を参照する。
 
 主な起動引数は次のとおりである。
 
@@ -65,14 +61,14 @@ ros2 launch cat_bringup bringup.launch.py enable_panorama:=true
 | `serial_port` | `/dev/rplidar` | LiDARのシリアルポート |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
 | `enable_joystick`, `rviz` | `true` | 操作入力と表示 |
-| `enable_panorama` | `false` | 12方向のRGB画像を保存する撮影アクション。画像合成は行わない |
+| `enable_panorama` | `true` | 24方向のRGB画像と点群を保存する撮影アクション。画像合成は行わない |
 | `robot_config` | パッケージ内の `robot.yaml` | 機体設定ファイル |
 
 ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
 
 ## 操作と停止
 
-起動時は停止モードである。ジョイスティックの割当ては、Xが手動、Aが外部指令、Bが停止、Yが停止確認後のフリーである。`enable_panorama:=true` で起動した場合、手動モード中のRBは12方向の画像撮影を開始する。画像は `~/ros2_ws/data/panorama` に保存し、合成しない。手動走行には右スティックを使用する。モードの切替時と通信異常時は停止モードに戻る。復旧後に自動で走行を再開しない。撮影後も停止モードになるため、再び手動で走るにはXを押す。
+起動時は停止モードである。ジョイスティックの割当ては、Xが手動、Aが外部指令、Bが停止、Yが停止確認後のフリーである。手動モード中のRBは24方向のRGB画像と点群の撮影を開始する。保存先は `~/ros2_ws/data/d1_vision` で、画像合成は行わない。手動走行には右スティックを使用する。モードの切替時と通信異常時は停止モードに戻る。復旧後に自動で走行を再開しない。撮影後も停止モードになるため、再び手動で走るにはXを押す。
 
 外部指令による走行を許可する場合は、停止状態とセンサ・モーター状態を確認してから次のサービスを使用する。`arm` は走行許可のみを行い、ゴールや速度指令は生成しない。
 
@@ -92,6 +88,7 @@ ros2 service call /base_safety/free std_srvs/srv/Trigger '{}'
 | `/wheel_odom` | 車輪・IMU EKFによる推定値 |
 | `/odom` | 選択した推定値。`odom → base_link` のTFも配信 |
 | `/scan`、`/scan_raw` | フィルタ後のLiDAR、フィルタ前のLiDAR |
+| `/zed/zed_node/rgb/color/rect/image`、`/zed/zed_node/point_cloud/cloud_registered` | ZEDのRGB画像、色付き点群。深度画像の配信は無効 |
 | `/base/state`、`/diagnostics` | モーター状態、電流・温度・異常の診断 |
 | `/cmd_vel_external`、`/cmd_vel_teleop`、`/cmd_vel_panorama` | 外部走行指令、平滑化済み手動指令、撮影旋回指令 |
 | `/cmd_vel_safe`、`/base_safety/mode` | 安全制御後の指令、ドライバへの動作許可 |

@@ -21,11 +21,15 @@
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # GEN_1 tracking requires depth processing; publish depth for paired capture.
+      # GEN_1 tracking and point cloud require stereo depth processing.
       depth_mode: 'PERFORMANCE'
-      publish_depth_map: true
+      # Lower values reject less reliable stereo matches (SDK defaults: 95/100).
+      depth_confidence: 90
+      depth_texture_conf: 90
+      publish_depth_map: false
       publish_depth_info: false
-      publish_point_cloud: false
+      point_cloud_freq: 10.0
+      publish_point_cloud: true
       publish_depth_confidence: false
       publish_disparity: false
     sensors:
