@@ -18,7 +18,7 @@ colcon build --symlink-install --packages-up-to cat_navigation
 source install/setup.bash
 ```
 
-`dependencies_lidar.repos` はLiDARドライバとemcl2だけを取得する。ZEDやGNSSも使用する場合は、これに代えて `dependencies.repos` を使い、ZED SDKも用意する。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
+`dependencies_lidar.repos` はLiDARドライバとemcl2だけを取得する。ZEDやGNSSも使用する場合は、これに代えて `dependencies.repos` を使い、ZED SDKも用意する。その場合は `colcon build --symlink-install --packages-up-to cat_navigation zed_wrapper ublox_dgnss` で任意のセンサ用パッケージもビルドする。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
 
 ## 機器と接続の確認
 
