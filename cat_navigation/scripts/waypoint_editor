@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Offline waypoint input and persistence, with no navigation or robot clients."""
+import math
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
+from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
+from visualization_msgs.msg import MarkerArray
+from waypoint_io import load_waypoints, make_markers, save_waypoints
+
+
+class WaypointEditor(Node):
+    def __init__(self):
+        super().__init__('waypoint_editor')
+        self.declare_parameter('output', '')
+        source = self.declare_parameter('input', '').value
+        self.points = load_waypoints(source) if source else []
+        qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.markers = self.create_publisher(MarkerArray, '~/markers', qos)
+        self.status = self.create_publisher(String, '~/status', qos)
+        self.create_subscription(PoseStamped, '~/add', self.add, 10)
+        self.create_service(Trigger, '~/save', self.save)
+        self.create_service(Trigger, '~/undo', self.undo)
+        self.create_service(Trigger, '~/clear', self.clear)
+        self.changed('Ready: use RViz 2D Goal Pose to add a waypoint')
+
+    def changed(self, text):
+        self.markers.publish(make_markers(self.points, self.get_clock().now().to_msg()))
+        self.report(f'{text}; {len(self.points)} waypoints')
+
+    def report(self, text):
+        self.status.publish(String(data=text))
+        self.get_logger().info(text)
+
+    def add(self, msg):
+        p, q = msg.pose.position, msg.pose.orientation
+        if msg.header.frame_id != 'map':
+            self.get_logger().warning('Set RViz Fixed Frame to map')
+            return
+        if not all(math.isfinite(v) for v in (p.x, p.y, p.z, q.x, q.y, q.z, q.w)):
+            self.get_logger().warning('Invalid waypoint coordinates')
+            return
+        norm = math.sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w)
+        if not .9 < norm < 1.1:
+            self.get_logger().warning('Invalid waypoint orientation')
+            return
+        x, y, z, w = q.x/norm, q.y/norm, q.z/norm, q.w/norm
+        yaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
+        self.points.append((p.x, p.y, yaw))
+        self.changed(f'Added ({p.x:.3f}, {p.y:.3f}, yaw={yaw:.3f})')
+
+    def save(self, _, response):
+        output = self.get_parameter('output').value
+        if not output:
+            response.message = 'Set the output parameter to a route YAML path'
+            return response
+        try:
+            target = save_waypoints(output, self.points)
+            response.success = True
+            response.message = f'Saved {len(self.points)} waypoints to {target}'
+            self.report(response.message)
+        except (OSError, ValueError) as error:
+            response.message = str(error)
+        return response
+
+    def undo(self, _, response):
+        if self.points:
+            self.points.pop()
+            self.changed('Removed the last waypoint')
+            response.success = True
+        response.message = f'{len(self.points)} waypoints remain'
+        return response
+
+    def clear(self, _, response):
+        self.points.clear()
+        self.changed('Cleared the list (saved file unchanged)')
+        response.success = True
+        response.message = 'Cleared; saved file unchanged'
+        return response
+
+
+def main():
+    rclpy.init()
+    node = None
+    try:
+        node = WaypointEditor()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()
+
+
+if __name__ == '__main__':
+    main()

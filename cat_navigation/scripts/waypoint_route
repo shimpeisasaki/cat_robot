@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Load a map-frame waypoint list; run it only after an explicit start request."""
+import math
+import time
+
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
+from action_msgs.msg import GoalStatus
+from nav2_msgs.action import FollowWaypoints
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
+from visualization_msgs.msg import MarkerArray
+from waypoint_io import load_waypoints, make_poses, make_markers
+
+
+class WaypointRoute(Node):
+    def __init__(self):
+        super().__init__('waypoint_route')
+        self.points = load_waypoints(self.declare_parameter('waypoints_file', '').value)
+        self.client = ActionClient(self, FollowWaypoints, '/follow_waypoints')
+        self.goal = None
+        self.pending = False
+        self.cancel_requested = False
+        self.base_mode = ''
+        self.base_time = -math.inf
+        qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.markers = self.create_publisher(MarkerArray, '~/markers', qos)
+        self.status = self.create_publisher(String, '~/status', qos)
+        self.create_subscription(String, '/base_safety/status', self.base_status, qos)
+        self.create_service(Trigger, '~/start', self.start)
+        self.create_service(Trigger, '~/cancel', self.cancel)
+        self.publish_markers()
+        self.report(f'Loaded {len(self.points)} waypoints; waiting for ~/start')
+
+    def report(self, text):
+        self.status.publish(String(data=text))
+        self.get_logger().info(text)
+
+    def base_status(self, msg):
+        self.base_mode = msg.data
+        self.base_time = time.monotonic()
+
+    def poses(self):
+        return make_poses(self.points, self.get_clock().now().to_msg())
+
+    def publish_markers(self):
+        self.markers.publish(make_markers(self.points, self.get_clock().now().to_msg()))
+
+    def start(self, _, response):
+        if self.pending or self.goal is not None:
+            response.message = 'A route is already active or canceling'
+        elif time.monotonic()-self.base_time > .3 or not self.base_mode.startswith('2: NAVIGATION'):
+            response.message = 'Arm navigation via /base_safety/arm first'
+        elif not self.client.server_is_ready():
+            response.message = '/follow_waypoints action server is not ready'
+        else:
+            self.pending = True
+            self.cancel_requested = False
+            try:
+                future = self.client.send_goal_async(
+                    FollowWaypoints.Goal(poses=self.poses()), feedback_callback=self.feedback)
+                future.add_done_callback(self.accepted)
+                response.success = True
+                response.message = 'Route submitted; progress is on ~/status'
+            except Exception as error:
+                self.pending = False
+                response.message = str(error)
+        return response
+
+    def feedback(self, msg):
+        self.status.publish(String(data=f'Waypoint {msg.feedback.current_waypoint + 1}/{len(self.points)}'))
+
+    def accepted(self, future):
+        self.pending = False
+        try:
+            handle = future.result()
+            if not handle.accepted:
+                self.report('Route rejected by Nav2')
+                return
+            self.goal = handle
+            handle.get_result_async().add_done_callback(self.finished)
+            if self.cancel_requested:
+                self.request_cancel()
+            else:
+                self.report('Route accepted')
+        except Exception as error:
+            self.goal = None
+            self.report(f'Route request failed: {error}')
+
+    def finished(self, future):
+        self.goal = None
+        self.cancel_requested = False
+        try:
+            result = future.result()
+            missed = [i + 1 for i in result.result.missed_waypoints]
+            if result.status == GoalStatus.STATUS_SUCCEEDED:
+                self.report(f'Route finished; missed waypoints: {missed}' if missed else 'Route completed')
+            elif result.status == GoalStatus.STATUS_CANCELED:
+                self.report('Route canceled')
+            else:
+                self.report(f'Route failed (status {result.status}); missed waypoints: {missed}')
+        except Exception as error:
+            self.report(f'Route result unavailable: {error}')
+
+    def request_cancel(self):
+        if self.goal is not None:
+            self.goal.cancel_goal_async().add_done_callback(self.canceled)
+
+    def canceled(self, future):
+        try:
+            if not future.result().goals_canceling:
+                self.report('Cancellation was not accepted; route may already have finished')
+        except Exception as error:
+            self.report(f'Cancellation request failed: {error}')
+
+    def cancel(self, _, response):
+        if not self.pending and self.goal is None:
+            response.message = 'No active route'
+        else:
+            self.cancel_requested = True
+            self.request_cancel()
+            response.success = True
+            response.message = 'Cancellation requested; /base_safety/brake stops the robot'
+        return response
+
+
+def main():
+    rclpy.init()
+    node = None
+    try:
+        node = WaypointRoute()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()
+
+
+if __name__ == '__main__':
+    main()

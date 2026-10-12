@@ -1,6 +1,6 @@
 # CATロボット 機体運用マニュアル
 
-`cat_robot` はモーター、LiDAR、ZED、任意のGNSS、機体モデル、オドメトリ、手動操作、安全停止、任意の画像撮影を管理する。Nav2、SLAM、自己位置推定、waypoint巡回は [experiment_cat](https://github.com/shimpeisasaki/experiment_cat) が管理する。`experiment_cat` の起動時には本パッケージの機体起動も含まれるため、`cat_bringup` を別途起動しない。
+`cat_robot` はモーター、LiDAR、ZED、任意のGNSS、機体モデル、オドメトリ、手動操作、安全停止、任意の画像撮影を管理する。`cat_navigation` は同じリポジトリ内で2D LiDAR SLAM、保存地図上の自己位置推定、Nav2、waypoint巡回を管理する。`cat_navigation` の起動時には機体起動も含まれるため、`cat_bringup` を別途起動しない。
 
 ## 新規PCへの導入
 
@@ -10,17 +10,15 @@ ROS 2 Humble、`colcon`、`vcstool`、`rosdep` を用意する。ZEDを使用す
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 git clone https://github.com/shimpeisasaki/cat_robot.git
-git clone https://github.com/shimpeisasaki/experiment_cat.git
 cd ~/ros2_ws
 vcs import src < src/cat_robot/dependencies.repos
-vcs import src < src/experiment_cat/dependencies.repos
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install --packages-up-to experiment_cat
+colcon build --symlink-install --packages-up-to cat_navigation
 source install/setup.bash
 ```
 
-`dependencies.repos` は、LiDAR、ZED、GNSS、emcl2のソースをワークスペースの `src/` に取得するための設定である。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
+`dependencies.repos` は、LiDAR、ZED、GNSS、emcl2のソースをワークスペースの `src/` に取得するための設定である。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
 
 ## 機器と接続の確認
 
@@ -114,7 +112,7 @@ ros2 launch ddsm115_controller motor_test_gui.launch.py
 | `/scan` がない | LiDARドライバ、`/scan_raw`、`sector_scan_filter` |
 | 走行が許可されない | `/base_safety/status`、`/base/state`、ジョイスティックのB/Y入力 |
 
-Nav2・地図・waypointに関する確認は [experiment_cat のREADME](https://github.com/shimpeisasaki/experiment_cat) を参照する。
+Nav2・地図・waypointに関する確認は [cat_navigation/README.md](cat_navigation/README.md) を参照する。ZEDを使わない地図作成は `ros2 launch cat_navigation mapping.launch.py`、保存地図でのナビゲーションは `ros2 launch cat_navigation navigation.launch.py` で起動する。両方とも既定で車輪オドメトリと2D LiDARを使用する。
 
 ## ライセンス
 

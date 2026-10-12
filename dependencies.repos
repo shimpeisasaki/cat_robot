@@ -13,3 +13,7 @@ repositories:
     type: git
     url: https://github.com/shimpeisasaki/ublox_dgnss.git
     version: abd2cab5ce9268cf3c1acbf27a4037997c4508b3
+  emcl2_ros2:
+    type: git
+    url: https://github.com/shimpeisasaki/emcl2_ros2.git
+    version: a81f4ecb4abc30a2adabf6e52606e7887c4252b7
