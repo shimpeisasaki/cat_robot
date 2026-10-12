@@ -4,21 +4,21 @@
 
 ## 新規PCへの導入
 
-ROS 2 Humble、`colcon`、`vcstool`、`rosdep` を用意する。ZEDを使用するPCには、対応するZED SDKと実行環境も必要である。以下はワークスペースを `~/ros2_ws` とする例である。
+ROS 2 Humble、`colcon`、`vcstool`、`rosdep` を用意する。以下は2D LiDARだけで地図作成とナビゲーションを行う構成で、ワークスペースを `~/ros2_ws` とする例である。
 
 ```bash
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 git clone https://github.com/shimpeisasaki/cat_robot.git
 cd ~/ros2_ws
-vcs import src < src/cat_robot/dependencies.repos
+vcs import src < src/cat_robot/dependencies_lidar.repos
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install --packages-up-to cat_navigation
 source install/setup.bash
 ```
 
-`dependencies.repos` は、LiDAR、ZED、GNSS、emcl2のソースをワークスペースの `src/` に取得するための設定である。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
+`dependencies_lidar.repos` はLiDARドライバとemcl2だけを取得する。ZEDやGNSSも使用する場合は、これに代えて `dependencies.repos` を使い、ZED SDKも用意する。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
 
 ## 機器と接続の確認
 
@@ -62,7 +62,7 @@ ros2 launch cat_bringup bringup.launch.py
 | `enable_panorama` | `true` | 24方向のRGB画像と点群を保存する撮影アクション。画像合成は行わない |
 | `robot_config` | パッケージ内の `robot.yaml` | 機体設定ファイル |
 
-ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
+ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。ZEDとGNSSを使う構成には、それぞれのROSパッケージが必要である。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
 
 ## 操作と停止
 

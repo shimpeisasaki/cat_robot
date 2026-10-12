@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <robot name="experiment_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="use_zed" default="true"/>
   <!-- Measurements are expressed from the drive-axle midpoint at ground level. -->
   <xacro:property name="wheel_radius" value="0.050"/>
   <xacro:property name="wheel_width" value="0.040"/>
@@ -84,14 +85,16 @@
 
   <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.
        Positive pitch tips the forward-facing camera down by 12 degrees. -->
-  <xacro:include filename="$(find zed_description)/urdf/zed_macro.urdf.xacro"/>
-  <xacro:zed_camera name="zed" model="zedm" enable_gnss="false">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-  </xacro:zed_camera>
-  <joint name="zed_mount_joint" type="fixed">
-    <parent link="base_link"/><child link="zed_camera_link"/>
-    <origin xyz="-0.285 0 0.550" rpy="0 ${12*pi/180} 0"/>
-  </joint>
+  <xacro:if value="$(arg use_zed)">
+    <xacro:include filename="$(find zed_description)/urdf/zed_macro.urdf.xacro"/>
+    <xacro:zed_camera name="zed" model="zedm" enable_gnss="false">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:zed_camera>
+    <joint name="zed_mount_joint" type="fixed">
+      <parent link="base_link"/><child link="zed_camera_link"/>
+      <origin xyz="-0.285 0 0.550" rpy="0 ${12*pi/180} 0"/>
+    </joint>
+  </xacro:if>
 
   <!-- GNSS link origin is the user-provided antenna reference point. -->
   <link name="gnss_antenna_link">

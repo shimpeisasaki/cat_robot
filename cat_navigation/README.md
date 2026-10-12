@@ -4,7 +4,7 @@
 
 ## 導入とビルド
 
-ROS 2 Humbleを使用する。リポジトリの取得、依存ソースの導入、デバイス設定は [cat_robotの導入手順](../README.md) を参照する。emcl2のソースは `cat_robot/dependencies.repos` で取得する。
+ROS 2 Humbleを使用する。リポジトリの取得、依存ソースの導入、デバイス設定は [cat_robotの導入手順](../README.md) を参照する。LiDARドライバとemcl2のソースは `cat_robot/dependencies_lidar.repos` で取得する。
 
 ```bash
 cd ~/ros2_ws

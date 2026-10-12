@@ -1,0 +1,10 @@
+# Minimal source dependencies for 2D LiDAR SLAM and saved-map navigation.
+repositories:
+  sllidar_ros2:
+    type: git
+    url: https://github.com/Slamtec/sllidar_ros2.git
+    version: 34300099fadfc772965962dec837bf436706188f
+  emcl2_ros2:
+    type: git
+    url: https://github.com/shimpeisasaki/emcl2_ros2.git
+    version: a81f4ecb4abc30a2adabf6e52606e7887c4252b7

@@ -39,7 +39,8 @@ def generate_launch_description():
                 LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
-                 Command(['xacro ', model]), value_type=str)}], output='screen'),
+                Command(['xacro ', model, ' use_zed:=', LaunchConfiguration('use_zed')]),
+                value_type=str)}], output='screen'),
         Node(package='ddsm115_controller', executable='base_driver',
              name='base_driver', parameters=[robot_config, {
                  'require_safety_heartbeat': True,
