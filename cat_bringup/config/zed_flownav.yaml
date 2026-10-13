@@ -8,10 +8,11 @@
       pub_resolution: 'NATIVE'
       pub_frame_rate: 30.0
     video:
-      # Publish both rectified eyes; launch lens:=left|right selects one.
+      # Publish both unrectified eyes; launch lens:=left|right selects one.
+      # Rectified frames are retrieved only while those topics have subscribers.
       publish_rgb: false
       publish_left_right: true
-      publish_raw: false
+      publish_raw: true
       publish_gray: false
       publish_stereo: false
       enable_24bit_output: true

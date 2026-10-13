@@ -13,10 +13,12 @@
       pub_frame_rate: 30.0
       grab_compute_capping_fps: 0.0
     video:
+      # Wrapper requires publish_rgb for the rgb/raw publisher too.
+      # Rectified frames are retrieved only while that topic has subscribers.
       publish_rgb: true
       publish_compressed: false
       publish_left_right: false
-      publish_raw: false
+      publish_raw: true
       publish_gray: false
       publish_stereo: false
       enable_24bit_output: true

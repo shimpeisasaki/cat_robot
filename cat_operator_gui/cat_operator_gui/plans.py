@@ -8,7 +8,7 @@ import math
 import yaml
 
 
-IMAGE_TOPIC = '/zed/zed_node/rgb/color/rect/image'
+IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image'
 MAPPING_TOPICS = ['/scan', '/odom', '/tf', '/tf_static']
 PRESETS = {
     '地図作成': MAPPING_TOPICS,
@@ -16,7 +16,7 @@ PRESETS = {
         '/scan_raw', '/wheel/odom', '/map', '/localization/map', '/joy',
         '/cmd_vel_safe', '/base/state', '/diagnostics', '/base_safety/control_state',
         '/navigation/ready', '/waypoint_route/status'],
-    'ZED画像評価': MAPPING_TOPICS + [IMAGE_TOPIC, '/zed/zed_node/rgb/color/rect/camera_info'],
+    'ZED画像評価': MAPPING_TOPICS + [IMAGE_TOPIC, '/zed/zed_node/rgb/color/raw/camera_info'],
     '全トピック': [],
 }
 

@@ -26,7 +26,7 @@ class PanoramaCapture(Node):
         self.output_dir = param('output_dir', str(Path.home() / 'ros2_ws/data/d1_vision'))
         self.input_timeout = float(param('input_timeout', .75))
         self.capture_timeout = float(param('capture_timeout', 10.))
-        rgb_topic = param('rgb_topic', '/zed/zed_node/rgb/color/rect/image')
+        rgb_topic = param('rgb_topic', '/zed/zed_node/rgb/color/raw/image')
         cloud_topic = param('cloud_topic', '/zed/zed_node/point_cloud/cloud_registered')
         self.bridge = CvBridge()
         self.rgb_frames = {}
