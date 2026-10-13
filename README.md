@@ -118,6 +118,8 @@ Nav2・地図・waypointに関する確認は [cat_navigation/README.md](cat_nav
 
 回帰テストは `colcon test --packages-select cat_bringup cat_capture cat_navigation` で実行できる。
 
+任意の操作画面として [cat_operator_gui](cat_operator_gui/README.md) を利用できます。従来のCLI操作でも運用できます。
+
 ## ライセンス
 
 本リポジトリは [Apache License, Version 2.0](LICENSE)（SPDX識別子: `Apache-2.0`）で提供する。外部依存パッケージには、それぞれのライセンスが適用される。

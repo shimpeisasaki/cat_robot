@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.8)
+project(cat_operator_gui)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS scripts/cat_operator_gui scripts/offline_tf_filter
+  DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(operator test/test_operator.py
+    ENV PYTHONNOUSERSITE=1 QT_QPA_PLATFORM=offscreen)
+endif()
+ament_package()
