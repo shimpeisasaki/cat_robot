@@ -14,6 +14,7 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 from std_msgs.msg import UInt8, Bool, String
 from std_srvs.srv import Trigger
+from cat_control_interfaces.msg import ControlState
 
 
 class BaseSafety(Node):
@@ -47,6 +48,7 @@ class BaseSafety(Node):
         status_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                 durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status = self.create_publisher(String, '~/status', status_qos)
+        self.control_state = self.create_publisher(ControlState, '~/control_state', status_qos)
         self.create_subscription(
             Twist, '/cmd_vel_external', lambda msg: self.command('navigation', msg), 1)
         self.create_subscription(
@@ -267,6 +269,8 @@ class BaseSafety(Node):
         self.output.publish(self.raw[source] if self.mode == 2 and fresh else Twist())
         self.lease.publish(UInt8(data=self.mode))
         self.status.publish(String(data=f'{self.mode}: {self.reason}'))
+        self.control_state.publish(ControlState(mode=self.mode,
+            source=self.drive_source if self.mode == ControlState.DRIVE else '', reason=self.reason))
 
 
 def main():

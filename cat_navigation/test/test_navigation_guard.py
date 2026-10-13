@@ -3,6 +3,8 @@ import importlib.util
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import SimpleNamespace as NS
+from unittest.mock import Mock
+from cat_control_interfaces.msg import ControlState
 from sensor_msgs.msg import LaserScan
 loader = SourceFileLoader('navigation_guard_impl', str(Path(__file__).parents[1]/'scripts/navigation_guard'))
 spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -40,3 +42,13 @@ def test_invalid_scans_do_not_refresh_watchdog():
     msg.ranges = [float('nan')]
     Safety.scan(obj, msg)
     assert obj.fresh['scan'] == accepted
+
+
+def test_navigation_permission_does_not_depend_on_display_reason():
+    client = Mock(srv_name='/navigate_to_pose/_action/cancel_goal')
+    obj = NS(last_cancel=-float('inf'), cancel_clients=[client], cancel_futures={})
+    Safety.base_status(obj, ControlState(mode=ControlState.DRIVE, source='navigation',
+                                        reason='文言を変更しても走行許可は同じ'))
+    client.call_async.assert_not_called()
+    Safety.base_status(obj, ControlState(mode=ControlState.DRIVE, source='manual'))
+    client.call_async.assert_called_once()

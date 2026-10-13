@@ -114,6 +114,10 @@ ros2 launch ddsm115_controller motor_test_gui.launch.py
 
 Nav2・地図・waypointに関する確認は [cat_navigation/README.md](cat_navigation/README.md) を参照する。ZEDを使わない地図作成は `ros2 launch cat_navigation mapping.launch.py`、保存地図でのナビゲーションは `ros2 launch cat_navigation navigation.launch.py` で起動する。両方とも既定で車輪オドメトリと2D LiDARを使用する。
 
+ノード間の制御状態は `/base_safety/control_state`（`cat_control_interfaces/msg/ControlState`）を使用する。`mode` はブレーキ0・フリー1・走行2、`source` は `navigation`・`manual`・`panorama` で、停止時は空になる。`/base_safety/status` は従来どおり表示用文字列を配信する。
+
+回帰テストは `colcon test --packages-select cat_bringup cat_capture cat_navigation` で実行できる。
+
 ## ライセンス
 
 本リポジトリは [Apache License, Version 2.0](LICENSE)（SPDX識別子: `Apache-2.0`）で提供する。外部依存パッケージには、それぞれのライセンスが適用される。

@@ -26,4 +26,6 @@ ros2 action send_goal /panorama/capture \
 
 既定の保存先は `~/ros2_ws/data/d1_vision/mmdd_hh:mm_角度_枚数/` です。同じ撮影番号で `f00_rgb.png` と `f00_cloud.pcd` を保存します。点群はバイナリPCDのXYZRGB形式で、フレームIDと時刻もヘッダーのコメントに残します。同じ時刻のRGBと点群が得られなければ撮影を失敗として扱います。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
 
-`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/status` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/rect/image` と `/zed/zed_node/point_cloud/cloud_registered` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
+`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/control_state` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/rect/image` と `/zed/zed_node/point_cloud/cloud_registered` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
+
+開始サービスがタイムアウトした場合は遅れて届く応答を追跡し、成立した撮影セッションを取り消します。取り消しが確認されるまでは、新しい撮影要求を受け付けません。

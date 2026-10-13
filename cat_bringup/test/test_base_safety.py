@@ -24,7 +24,7 @@ def subject():
              raw={'navigation': Twist(), 'manual': Twist(), 'panorama': Twist()},
              last_command={source: -math.inf for source in ('navigation', 'manual', 'panorama')},
              a=0, b=1, x=2, y=3, buttons=[0]*11,
-             output=Mock(), lease=Mock(), status=Mock(),
+             output=Mock(), lease=Mock(), status=Mock(), control_state=Mock(),
              get_logger=Mock(), problem=lambda **kwargs: None, physical_problem=lambda: None,
              active={}, cancel_futures={}, rpm=[0, 0], last_tick=now,
              cancel_goals=Mock(), header_ok=lambda *args: True,

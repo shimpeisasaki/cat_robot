@@ -9,6 +9,8 @@
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>cat_panorama_interfaces</exec_depend>
+  <exec_depend>cat_control_interfaces</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-opencv</exec_depend>

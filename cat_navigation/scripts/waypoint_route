@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from action_msgs.msg import GoalStatus
 from nav2_msgs.action import FollowWaypoints
+from cat_control_interfaces.msg import ControlState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import MarkerArray
@@ -23,12 +24,12 @@ class WaypointRoute(Node):
         self.goal = None
         self.pending = False
         self.cancel_requested = False
-        self.base_mode = ''
+        self.navigation_enabled = False
         self.base_time = -math.inf
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.markers = self.create_publisher(MarkerArray, '~/markers', qos)
         self.status = self.create_publisher(String, '~/status', qos)
-        self.create_subscription(String, '/base_safety/status', self.base_status, qos)
+        self.create_subscription(ControlState, '/base_safety/control_state', self.base_status, qos)
         self.create_service(Trigger, '~/start', self.start)
         self.create_service(Trigger, '~/cancel', self.cancel)
         self.publish_markers()
@@ -39,7 +40,7 @@ class WaypointRoute(Node):
         self.get_logger().info(text)
 
     def base_status(self, msg):
-        self.base_mode = msg.data
+        self.navigation_enabled = msg.mode == ControlState.DRIVE and msg.source == 'navigation'
         self.base_time = time.monotonic()
 
     def poses(self):
@@ -51,7 +52,7 @@ class WaypointRoute(Node):
     def start(self, _, response):
         if self.pending or self.goal is not None:
             response.message = 'A route is already active or canceling'
-        elif time.monotonic()-self.base_time > .3 or not self.base_mode.startswith('2: NAVIGATION'):
+        elif time.monotonic()-self.base_time > .3 or not self.navigation_enabled:
             response.message = 'Arm navigation via /base_safety/arm first'
         elif not self.client.server_is_ready():
             response.message = '/follow_waypoints action server is not ready'

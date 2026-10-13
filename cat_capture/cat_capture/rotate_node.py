@@ -13,6 +13,7 @@ from rclpy.signals import SignalHandlerOptions
 from rclpy.task import Future
 from cat_panorama_interfaces.action import CapturePanorama
 from cat_panorama_interfaces.srv import StartCapture
+from cat_control_interfaces.msg import ControlState
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Joy
@@ -35,7 +36,7 @@ class PanoramaRotate(Node):
         self.create_subscription(Joy, '/joy', self.on_joy, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self.on_odom, qos_profile_sensor_data)
         self.create_subscription(UInt8, '/base/state', self.on_motor, 1)
-        self.create_subscription(String, '/base_safety/status', self.on_safety, 1)
+        self.create_subscription(ControlState, '/base_safety/control_state', self.on_safety, 1)
         self.create_subscription(String, '/panorama_capture/status', self.on_capture, 1)
         self.service_clients = {name: self.create_client(Trigger, service) for name, service in {
             'panorama': '/base_safety/panorama', 'brake': '/base_safety/brake',
@@ -57,6 +58,8 @@ class PanoramaRotate(Node):
         self.drive_requested = False
         self.started_at = 0.0
         self.pending = None
+        self.late_start = None
+        self.cleanup_future = None
         self.buttons = []
         self.odom_yaw = None
         self.odom_at = 0.0
@@ -67,6 +70,7 @@ class PanoramaRotate(Node):
         self.motor_at = 0.0
         self.safety_mode = None
         self.safety_reason = ''
+        self.safety_source = ''
         self.safety_at = 0.0
         self.capture_status = {}
         self.capture_at = 0.0
@@ -91,13 +95,14 @@ class PanoramaRotate(Node):
             if self.state != 'idle':
                 self.abort('Joystick took control', operator=True)
         elif (pressed(self.rb_button) and self.state == 'idle' and
-              not self.goal_reserved and self.action_goal is None and
+              not self.goal_reserved and self.action_goal is None and self.late_start is None and
               self.fresh(self.safety_at) and self.safety_mode == 2 and
-              self.safety_reason.startswith('MANUAL')):
+              self.safety_source == 'manual'):
             self.begin()
 
     def accept_goal(self, request):
-        if self.state != 'idle' or self.goal_reserved or self.action_goal is not None:
+        if (self.state != 'idle' or self.goal_reserved or self.action_goal is not None or
+                self.late_start is not None):
             return GoalResponse.REJECT
         if (request.frames != 0 and request.frames < 3) or not math.isfinite(request.angle_deg) or (
                 request.angle_deg < 0 or request.angle_deg > 360):
@@ -154,12 +159,10 @@ class PanoramaRotate(Node):
         self.motor_at = time.monotonic()
 
     def on_safety(self, msg):
-        try:
-            mode, self.safety_reason = msg.data.split(': ', 1)
-            self.safety_mode = int(mode)
-            self.safety_at = time.monotonic()
-        except ValueError:
-            self.safety_mode = None
+        self.safety_mode = msg.mode
+        self.safety_source = msg.source
+        self.safety_reason = msg.reason
+        self.safety_at = time.monotonic()
 
     def on_capture(self, msg):
         try:
@@ -195,7 +198,7 @@ class PanoramaRotate(Node):
 
     def panorama_enabled(self):
         return (self.fresh(self.safety_at) and self.safety_mode == 2 and
-                self.safety_reason.startswith('PANORAMA'))
+                self.safety_source == 'panorama')
 
     def zero(self):
         self.cmd.publish(Twist())
@@ -217,8 +220,8 @@ class PanoramaRotate(Node):
         name, future, sent = self.pending
         if not future.done():
             if time.monotonic() - sent > 5:
-                self.pending = None
                 if name == 'brake':
+                    self.pending = None
                     self.get_logger().error('BRAKE request timed out; check base_safety/status')
                     self.complete_goal('error', 'BRAKE request timed out')
                     self.state = 'idle'
@@ -265,6 +268,8 @@ class PanoramaRotate(Node):
         self.zero()
         if self.state in ('brake_request', 'brake_wait'):
             return
+        if self.pending is not None and self.pending[0] == 'start':
+            self.late_start = self.pending[1]
         self.pending = None
         if self.session_active and self.service_clients['cancel'].service_is_ready():
             self.service_clients['cancel'].call_async(Trigger.Request())
@@ -284,8 +289,43 @@ class PanoramaRotate(Node):
         self.outcome_message = 'Panorama frames saved'
         self.state, self.phase_at = 'brake_request', time.monotonic()
 
+    def poll_late_start(self):
+        """Retire a start request that completed after its action was abandoned."""
+        if self.late_start is None or not self.late_start.done():
+            return
+        try:
+            started = self.late_start.result().success
+        except Exception as exc:
+            self.late_start = None
+            self.get_logger().error(f'Abandoned capture start failed: {exc}')
+            return
+        if not started:
+            self.late_start = None
+            return
+        if self.cleanup_future is not None:
+            if not self.cleanup_future.done():
+                return
+            try:
+                reply = self.cleanup_future.result()
+            except Exception as exc:
+                self.cleanup_future = None
+                self.get_logger().error(f'Late capture cleanup failed: {exc}')
+                return
+            self.cleanup_future = None
+            if reply.success:
+                self.late_start = None
+                return
+            self.get_logger().warning('Late capture cleanup rejected: ' + reply.message)
+        try:
+            client = self.service_clients['cancel']
+            if client.service_is_ready():
+                self.cleanup_future = client.call_async(Trigger.Request())
+        except Exception as exc:
+            self.get_logger().error(f'Late capture cleanup failed: {exc}', throttle_duration_sec=1.)
+
     def tick(self):
         now = time.monotonic()
+        self.poll_late_start()
         if self.action_goal and self.action_goal.is_cancel_requested and self.state not in ('idle', 'brake_request', 'brake_wait'):
             self.abort('Action cancelled')
         self.poll_service()
