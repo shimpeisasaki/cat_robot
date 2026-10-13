@@ -31,6 +31,15 @@ ros2 launch cat_navigation navigation.launch.py
 | Nav2の計画・costmap | `map/19F_260928_Nav.yaml` と同名のPGM | `/map` |
 | 巡回ルート | `map/19F_waypoint.yaml` | `/waypoint_route/markers` |
 
+巡回の中間点は半径1.0 m・向き±90°、最終点は半径0.5 m・向き±30°で到達と判定します。
+位置と向きが同時に許容範囲内にある必要があります。1点だけのルートには最終点の条件を使います。
+進捗判定は20秒以内に基準位置から0.1 m超移動することです。その場旋回は移動距離に含みません。
+`waypoint_route` が `/navigate_to_pose` に1点ずつ送り、各ゴールのbehavior treeで
+中間点用・最終点用のgoal checkerとDWB controllerを指定します。
+到達後の0.2秒待機と、失敗した点を記録して次へ進む動作は維持しています。
+通常のRVizゴールと、Nav2の `/follow_waypoints` に直接送るゴールには最終点の条件を使います。
+中間点・最終点を使い分ける巡回は `/waypoint_route/start` から開始してください。
+
 地図を変更する場合は `map:=/path/localization.yaml`、`navigation_map:=/path/navigation.yaml`、`waypoints_file:=/path/route.yaml` を指定する。`localization_map` は `map` の別名である。両地図とwaypointは同じ `map` 座標系、解像度、原点に揃える。地図YAMLの `image` には対応する画像ファイルを指定する。
 
 保存地図での起動後、RVizの「2D Pose Estimate」で実際の機体位置と向きを設定する。`/navigation/ready`、`/base_safety/status` とRViz表示を確認し、機体が停止している状態を2秒以上維持してから走行を許可する。
@@ -137,6 +146,11 @@ costmapのLiDAR障害物高さ上限はlocal/globalともに0.8 m、スキャン
 | 走行許可が解除される | `/navigation/ready`、`/base_safety/status`、モーター診断 |
 
 機体側の通信と停止制御は [cat_robotのREADME](../README.md) を参照する。
+
+`navigation_guard` の `map_tf_future_tolerance` は既定で0.3秒です。
+EMCLが `transform_tolerance`（既定0.2秒）を加えて配信する `map -> odom` を許容します。
+独自のEMCL設定を使う場合は、その未来幅に合わせてこのパラメータを設定してください。
+`odom -> base_link` とセンサ入力の未来時刻許容は0.1秒のままです。
 
 ## ライセンス
 

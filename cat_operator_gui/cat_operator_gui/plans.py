@@ -122,6 +122,7 @@ def defaults(shares):
         'localization_yaml': nav / 'config/emcl2.yaml',
         'localization_map': nav / 'map/19F_260928.yaml',
         'navigation_map': nav / 'map/19F_260928_Nav.yaml',
+        'waypoints': nav / 'map/19F_waypoint.yaml',
     }.items():
         setattr(settings, name, str(value))
     return settings

@@ -15,6 +15,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, SetRemap
 from launch_ros.substitutions import FindPackageShare
+from nav2_common.launch import RewrittenYaml
 
 
 def map_nodes(context):
@@ -77,6 +78,14 @@ def generate_launch_description():
     base_share = FindPackageShare('cat_bringup')
     nav2_share = FindPackageShare('nav2_bringup')
     params_file = LaunchConfiguration('params_file')
+    configured_params = RewrittenYaml(
+        source_file=params_file,
+        param_rewrites={
+            'default_nav_to_pose_bt_xml': PathJoinSubstitution([
+                share, 'config', 'behavior_trees', 'navigate_final.xml']),
+            'default_nav_through_poses_bt_xml': PathJoinSubstitution([
+                share, 'config', 'behavior_trees', 'navigate_through_poses.xml']),
+        }, convert_types=True)
     robot_config = LaunchConfiguration('robot_config')
     manual_config = LaunchConfiguration('manual_config')
 
@@ -162,7 +171,7 @@ def generate_launch_description():
             launch_arguments={
                 'use_sim_time': 'false',
                 'autostart': 'true',
-                'params_file': params_file,
+                'params_file': configured_params,
                 'use_composition': 'False',
             }.items()),
 

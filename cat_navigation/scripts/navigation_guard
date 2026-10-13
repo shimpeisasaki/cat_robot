@@ -21,8 +21,12 @@ class NavigationGuard(Node):
         self.scan_max_age = self.declare_parameter('scan_max_age', .3).value
         self.scan_timeout = self.declare_parameter('scan_timeout', .5).value
         self.scan_frame = self.declare_parameter('scan_frame', 'laser').value
+        # EMCL future-dates map -> odom by transform_tolerance (default 0.2s).
+        self.map_tf_future_tolerance = self.declare_parameter('map_tf_future_tolerance', .3).value
         if not all(math.isfinite(v) and v > 0 for v in (self.scan_max_age, self.scan_timeout)):
             raise ValueError('Scan age and timeout must be finite and positive')
+        if not math.isfinite(self.map_tf_future_tolerance) or self.map_tf_future_tolerance < 0:
+            raise ValueError('Map TF future tolerance must be finite and nonnegative')
         self.fresh, self.stamps = {}, {}
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
@@ -78,11 +82,12 @@ class NavigationGuard(Node):
     def tick(self):
         valid = self.sensor_problem() is None
         now = self.get_clock().now().nanoseconds*1e-9
-        for parent, child, age in [('odom', 'base_link', .5), ('map', 'odom', 1.5)]:
+        for parent, child, age, future in [('odom', 'base_link', .5, .1),
+                                         ('map', 'odom', 1.5, self.map_tf_future_tolerance)]:
             try:
                 tf = self.buffer.lookup_transform(parent, child, Time())
                 stamp = tf.header.stamp.sec + tf.header.stamp.nanosec*1e-9
-                valid = valid and stamp > 0 and -.1 <= now-stamp <= age
+                valid = valid and stamp > 0 and -future <= now-stamp <= age
             except Exception:
                 valid = False
         publishers = self.get_publishers_info_by_topic('/cmd_vel_external')

@@ -60,6 +60,7 @@ class BaseSafety(Node):
         self.create_subscription(Bool, '/navigation/ready', self.navigation_state, 1)
         self.create_subscription(Bool, '/ddsm115/brake', self.external_brake, qos_profile_sensor_data)
         self.create_service(Trigger, '~/arm', self.arm)
+        self.create_service(Trigger, '~/request_navigation', self.request_navigation_service)
         self.create_service(Trigger, '~/manual', self.manual_service)
         self.create_service(Trigger, '~/panorama', self.panorama_service)
         self.create_service(Trigger, '~/brake', self.brake_service)
@@ -196,6 +197,19 @@ class BaseSafety(Node):
         self.activate_drive('navigation')
         response.success = True
         response.message = 'NAVIGATION enabled; an existing or new goal may run'
+        return response
+
+    def request_navigation_service(self, _, response):
+        if self.joystick and (not self.buttons or self.buttons[self.b] or self.buttons[self.y]):
+            response.message = 'Release joystick B/Y first'
+            return response
+        if self.mode == 2 and self.drive_source == 'navigation':
+            response.success = True
+            response.message = 'NAVIGATION is already enabled'
+            return response
+        self.request_drive('navigation')
+        response.success = True
+        response.message = 'Navigation requested; waiting for healthy stationary state'
         return response
 
     def manual_service(self, _, response):

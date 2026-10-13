@@ -48,7 +48,8 @@ def test_map_inputs_checked_before_start(configuration, tmp_path):
     settings, shares = configuration
     settings.mode = 'navigation'
     plan = mode_plan(settings, shares)
-    assert 'waypoints_file:=' in plan.jobs[0].command
+    assert f'waypoints_file:={settings.waypoints}' in plan.jobs[0].command
+    assert plan.sources['巡回ルート YAML'] == settings.waypoints
     assert 'enable_panorama:=false' in plan.jobs[0].command
     image = tmp_path / 'map.pgm'
     image.write_text('P2\n1 1\n255\n0\n')

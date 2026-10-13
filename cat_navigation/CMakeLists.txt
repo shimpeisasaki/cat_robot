@@ -11,6 +11,7 @@ install(FILES scripts/waypoint_io.py DESTINATION lib/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(navigation_guard test/test_navigation_guard.py ENV PYTHONNOUSERSITE=1)
+  ament_add_pytest_test(waypoint_route test/test_waypoint_route.py ENV PYTHONNOUSERSITE=1)
 endif()
 
 ament_package()

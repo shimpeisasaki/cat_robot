@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Own ZED launch descendants and recover VIO only after stopping all of them."""
+import argparse
+import fcntl
+import os
+import signal
+import subprocess
+import time
+
+
+def group_alive(pgid):
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def stop_group(process):
+    """Bound cleanup below the parent launch's default five-second timeout.
+
+    Signal the group even if ros2 launch has already exited: its container
+    may still be running and retaining the camera and ROS service names.
+    """
+    for sig, timeout in ((signal.SIGINT, 2.), (signal.SIGTERM, 1.),
+                         (signal.SIGKILL, .5)):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            process.poll()  # Reap the launch parent if it has exited.
+            if not group_alive(process.pid):
+                return
+            time.sleep(.02)
+    process.poll()
+
+
+def main():
+    import rclpy
+    import yaml
+    from nav_msgs.msg import Odometry
+    from rclpy.qos import qos_profile_sensor_data
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--serial-number', required=True)
+    parser.add_argument('--config', required=True)
+    args, ros_args = parser.parse_known_args()
+    with open(args.config, encoding='utf-8') as stream:
+        config = yaml.safe_load(stream)
+    # CAT override files use the wildcard node key.
+    vio = config.get('/**', {}).get('ros__parameters', {}).get(
+        'pos_tracking', {}).get('pos_tracking_enabled', False)
+    # Lock before discovery/spawn so simultaneous CAT launches cannot race.
+    lock_path = f'/tmp/cat-zed-{os.getuid()}-{args.serial_number}.lock'
+    with open(lock_path, 'a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print('ZED already owned by another CAT launch', flush=True)
+            return 2
+        rclpy.init(args=ros_args)
+        node = rclpy.create_node('zed_supervisor')
+        stopping = False
+
+        def stop(_sig, _frame):
+            nonlocal stopping
+            stopping = True
+
+        signal.signal(signal.SIGINT, stop)
+        signal.signal(signal.SIGTERM, stop)
+        process = None
+        last_odom = None
+
+        def odom(_msg):
+            nonlocal last_odom
+            last_odom = time.monotonic()
+
+        if vio:
+            node.create_subscription(Odometry, '/zed/zed_node/odom', odom,
+                                     qos_profile_sensor_data)
+        try:
+            deadline = time.monotonic() + 1.
+            while not stopping and time.monotonic() < deadline:
+                rclpy.spin_once(node, timeout_sec=.05)
+            if stopping:
+                return 0
+            if any(ns == '/zed' and name in ('zed_container', 'zed_node')
+                   for name, ns in node.get_node_names_and_namespaces()):
+                node.get_logger().error(
+                    'Existing /zed container/node detected; stop the previous '
+                    'ZED launch before restarting. Refusing duplicate camera ownership.')
+                return 2
+            command = ['ros2', 'launch', 'zed_wrapper', 'zed_camera.launch.py',
+                       'camera_model:=zedm', 'camera_name:=zed', 'node_name:=zed_node',
+                       f'serial_number:={args.serial_number}',
+                       'publish_urdf:=false', 'publish_tf:=false',
+                       'publish_map_tf:=false', 'publish_imu_tf:=true',
+                       'enable_gnss:=false', 'enable_ipc:=false', 'use_sim_time:=false',
+                       f'ros_params_override_path:={args.config}']
+            process = subprocess.Popen(command, start_new_session=True)
+            started = time.monotonic()
+            while not stopping:
+                code = process.poll()
+                if code is not None:
+                    return code
+                rclpy.spin_once(node, timeout_sec=.1)
+                now = time.monotonic()
+                if vio and ((last_odom is None and now-started > 60.) or
+                            (last_odom is not None and now-last_odom > 10.)):
+                    node.get_logger().error(
+                        'ZED VIO output missing; stopping the complete wrapper '
+                        'process group before respawn. Restart navigation after recovery.')
+                    return 1
+            return 0
+        finally:
+            if process is not None:
+                stop_group(process)
+            node.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

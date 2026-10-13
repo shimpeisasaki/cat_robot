@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Load a map-frame waypoint list; run it only after an explicit start request."""
+"""Run map-frame waypoints with explicit intermediate/final goal checkers."""
 import math
 import time
+from pathlib import Path
 
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from action_msgs.msg import GoalStatus
-from nav2_msgs.action import FollowWaypoints
+from nav2_msgs.action import NavigateToPose
+from ament_index_python.packages import get_package_share_directory
 from cat_control_interfaces.msg import ControlState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -20,12 +22,20 @@ class WaypointRoute(Node):
     def __init__(self):
         super().__init__('waypoint_route')
         self.points = load_waypoints(self.declare_parameter('waypoints_file', '').value)
-        self.client = ActionClient(self, FollowWaypoints, '/follow_waypoints')
+        trees = Path(get_package_share_directory('cat_navigation')) / 'config' / 'behavior_trees'
+        self.intermediate_tree = str(trees / 'navigate_intermediate.xml')
+        self.final_tree = str(trees / 'navigate_final.xml')
+        self.client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.goal = None
         self.pending = False
         self.cancel_requested = False
         self.navigation_enabled = False
         self.base_time = -math.inf
+        self.route_active = False
+        self.index = 0
+        self.missed = []
+        self.advance_at = None
+        self.create_timer(.05, self.tick)
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.markers = self.create_publisher(MarkerArray, '~/markers', qos)
         self.status = self.create_publisher(String, '~/status', qos)
@@ -42,6 +52,11 @@ class WaypointRoute(Node):
     def base_status(self, msg):
         self.navigation_enabled = msg.mode == ControlState.DRIVE and msg.source == 'navigation'
         self.base_time = time.monotonic()
+        if self.route_active and not self.navigation_enabled:
+            self.stop_route()
+
+    def behavior_tree_for(self, index):
+        return self.final_tree if index == len(self.points)-1 else self.intermediate_tree
 
     def poses(self):
         return make_poses(self.points, self.get_clock().now().to_msg())
@@ -50,60 +65,111 @@ class WaypointRoute(Node):
         self.markers.publish(make_markers(self.points, self.get_clock().now().to_msg()))
 
     def start(self, _, response):
-        if self.pending or self.goal is not None:
+        if self.route_active:
             response.message = 'A route is already active or canceling'
         elif time.monotonic()-self.base_time > .3 or not self.navigation_enabled:
             response.message = 'Arm navigation via /base_safety/arm first'
         elif not self.client.server_is_ready():
-            response.message = '/follow_waypoints action server is not ready'
+            response.message = '/navigate_to_pose action server is not ready'
         else:
-            self.pending = True
+            self.route_active = True
+            self.index = 0
+            self.missed = []
+            self.advance_at = None
             self.cancel_requested = False
             try:
-                future = self.client.send_goal_async(
-                    FollowWaypoints.Goal(poses=self.poses()), feedback_callback=self.feedback)
-                future.add_done_callback(self.accepted)
+                self.send_waypoint()
                 response.success = True
                 response.message = 'Route submitted; progress is on ~/status'
             except Exception as error:
-                self.pending = False
+                self.finish_route(f'Route request failed: {error}')
                 response.message = str(error)
         return response
 
+    def send_waypoint(self):
+        self.pending = True
+        goal = NavigateToPose.Goal(pose=self.poses()[self.index],
+                                   behavior_tree=self.behavior_tree_for(self.index))
+        future = self.client.send_goal_async(goal, feedback_callback=self.feedback)
+        future.add_done_callback(self.accepted)
+
+    def tick(self):
+        if not self.route_active:
+            return
+        if time.monotonic()-self.base_time > .3 or not self.navigation_enabled:
+            self.stop_route()
+        if (not self.route_active or self.cancel_requested or self.pending or
+                self.goal is not None or self.advance_at is None or
+                time.monotonic() < self.advance_at):
+            return
+        self.advance_at = None
+        self.index += 1
+        if self.index == len(self.points):
+            self.finish_route(f'Route finished; missed waypoints: {self.missed}'
+                              if self.missed else 'Route completed')
+        else:
+            try:
+                self.send_waypoint()
+            except Exception as error:
+                self.finish_route(f'Route request failed: {error}')
+
     def feedback(self, msg):
-        self.status.publish(String(data=f'Waypoint {msg.feedback.current_waypoint + 1}/{len(self.points)}'))
+        self.status.publish(String(data=f'Waypoint {self.index + 1}/{len(self.points)}'))
 
     def accepted(self, future):
         self.pending = False
         try:
             handle = future.result()
             if not handle.accepted:
-                self.report('Route rejected by Nav2')
+                if self.cancel_requested:
+                    self.finish_route('Route canceled')
+                else:
+                    self.missed.append(self.index + 1)
+                    self.report(f'Waypoint {self.index + 1} rejected by Nav2; moving to next')
+                    self.advance_at = time.monotonic()
                 return
             self.goal = handle
             handle.get_result_async().add_done_callback(self.finished)
             if self.cancel_requested:
                 self.request_cancel()
             else:
-                self.report('Route accepted')
+                self.report(f'Waypoint {self.index + 1}/{len(self.points)} accepted')
         except Exception as error:
-            self.goal = None
-            self.report(f'Route request failed: {error}')
+            self.finish_route(f'Route request failed: {error}')
 
     def finished(self, future):
         self.goal = None
-        self.cancel_requested = False
         try:
             result = future.result()
-            missed = [i + 1 for i in result.result.missed_waypoints]
-            if result.status == GoalStatus.STATUS_SUCCEEDED:
-                self.report(f'Route finished; missed waypoints: {missed}' if missed else 'Route completed')
-            elif result.status == GoalStatus.STATUS_CANCELED:
-                self.report('Route canceled')
+            if self.cancel_requested or result.status == GoalStatus.STATUS_CANCELED:
+                self.finish_route('Route canceled')
+            elif result.status == GoalStatus.STATUS_SUCCEEDED:
+                self.report(f'Waypoint {self.index + 1} reached')
+                # Preserve the existing 200 ms wait_at_waypoint behavior.
+                self.advance_at = time.monotonic() + .2
             else:
-                self.report(f'Route failed (status {result.status}); missed waypoints: {missed}')
+                self.missed.append(self.index + 1)
+                self.report(f'Waypoint {self.index + 1} failed (status {result.status}); moving to next')
+                self.advance_at = time.monotonic()
         except Exception as error:
-            self.report(f'Route result unavailable: {error}')
+            self.finish_route(f'Route result unavailable: {error}')
+
+    def finish_route(self, message):
+        self.route_active = False
+        self.pending = False
+        self.goal = None
+        self.advance_at = None
+        self.cancel_requested = False
+        self.report(message)
+
+    def stop_route(self):
+        if self.cancel_requested:
+            return
+        self.cancel_requested = True
+        if self.pending or self.goal is not None:
+            self.request_cancel()
+        else:
+            self.finish_route('Route canceled')
 
     def request_cancel(self):
         if self.goal is not None:
@@ -117,11 +183,10 @@ class WaypointRoute(Node):
             self.report(f'Cancellation request failed: {error}')
 
     def cancel(self, _, response):
-        if not self.pending and self.goal is None:
+        if not self.route_active:
             response.message = 'No active route'
         else:
-            self.cancel_requested = True
-            self.request_cancel()
+            self.stop_route()
             response.success = True
             response.message = 'Cancellation requested; /base_safety/brake stops the robot'
         return response

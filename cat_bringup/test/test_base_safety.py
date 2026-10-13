@@ -112,6 +112,18 @@ def test_a_selects_navigation_and_x_selects_manual():
     assert obj.mode == 2 and obj.drive_source == 'manual'
 
 
+def test_gui_navigation_request_switches_from_manual_like_a():
+    obj = subject()
+    obj.mode = 2
+    obj.drive_source = 'manual'
+    response = Safety.request_navigation_service(obj, None, NS(success=False, message=''))
+    assert response.success and obj.mode == 0 and obj.pending_drive == 'navigation'
+    assert obj.output.publish.call_args.args[0].linear.x == 0
+    obj.ready_since = time.monotonic() - 3
+    Safety.tick(obj)
+    assert obj.mode == 2 and obj.drive_source == 'navigation'
+
+
 def test_manual_mode_does_not_require_map_to_odom():
     obj = subject()
     obj.pending_drive = 'manual'

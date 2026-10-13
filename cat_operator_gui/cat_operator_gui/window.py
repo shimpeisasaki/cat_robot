@@ -195,7 +195,7 @@ class OperatorWindow(QMainWindow):
         brake = self.button('ブレーキ', lambda: self.trigger('/base_safety/brake'), top)
         brake.setStyleSheet('background:#b52e35;color:white;font-weight:bold;padding:8px')
         self.button('手動走行許可', lambda: self.trigger('/base_safety/manual'), top)
-        self.button('ナビ走行許可', lambda: self.trigger('/base_safety/arm'), top)
+        self.button('ナビ走行許可', lambda: self.trigger('/base_safety/request_navigation'), top)
         self.button('巡回開始', lambda: self.trigger('/waypoint_route/start'), top)
         self.button('巡回取消＋ブレーキ', self.cancel_route, top)
         root.addLayout(top)

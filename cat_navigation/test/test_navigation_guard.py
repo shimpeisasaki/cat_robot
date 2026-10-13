@@ -4,6 +4,7 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
+import pytest
 from cat_control_interfaces.msg import ControlState
 from sensor_msgs.msg import LaserScan
 loader = SourceFileLoader('navigation_guard_impl', str(Path(__file__).parents[1]/'scripts/navigation_guard'))
@@ -52,3 +53,24 @@ def test_navigation_permission_does_not_depend_on_display_reason():
     client.call_async.assert_not_called()
     Safety.base_status(obj, ControlState(mode=ControlState.DRIVE, source='manual'))
     client.call_async.assert_called_once()
+
+
+@pytest.mark.parametrize('map_age,odom_age,expected', [
+    (-.2, .02, True),  # EMCL's normal future-dated transform.
+    (-.4, .02, False),  # Beyond the configured future allowance.
+    (1.6, .02, False),  # Stale localization must still stop navigation.
+    (-.2, -.2, False),  # Odom retains its stricter clock check.
+    (-.2, .6, False),  # Stale odom must still stop navigation.
+])
+def test_tf_time_checks_respect_emcl_tolerance(map_age, odom_age, expected):
+    def lookup(parent, child, stamp):
+        value = 100 - (map_age if parent == 'map' else odom_age)
+        return NS(header=NS(stamp=NS(sec=int(value),
+                                    nanosec=round((value-int(value))*1e9))))
+
+    obj = NS(sensor_problem=lambda: None, map_tf_future_tolerance=.3,
+             get_clock=lambda: NS(now=lambda: NS(nanoseconds=100_000_000_000)),
+             buffer=NS(lookup_transform=lookup), ready=Mock(),
+             get_publishers_info_by_topic=lambda _: [NS(node_name='collision_monitor')])
+    Safety.tick(obj)
+    assert obj.ready.publish.call_args.args[0].data == expected

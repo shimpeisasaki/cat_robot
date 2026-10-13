@@ -7,10 +7,10 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
-    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
-    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
-    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
-    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
+    # Resolved to installed CAT behavior trees by navigation.launch.py.
+    default_nav_to_pose_bt_xml: ""
+    default_nav_through_poses_bt_xml: ""
+    # CAT trees retain Nav2's replanning/recovery and select a goal checker explicitly.
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
@@ -77,25 +77,26 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
-    controller_plugins: ["FollowPath"]
+    goal_checker_plugins: ["general_goal_checker", "intermediate_goal_checker"]
+    controller_plugins: ["FollowPath", "FollowPathIntermediate"]
 
     # Progress checker parameters
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
-    # Goal checker parameters
-    #precise_goal_checker:
-    #  plugin: "nav2_controller::SimpleGoalChecker"
-    #  xy_goal_tolerance: 0.25
-    #  yaw_goal_tolerance: 0.25
-    #  stateful: True
+      required_movement_radius: 0.1
+      movement_time_allowance: 20.0
+    # Final waypoint and ordinary navigation goals: 0.5 m / 30 degrees.
     general_goal_checker:
-      stateful: True
+      stateful: False
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.5
+      yaw_goal_tolerance: 0.5235987755982988
+    # Intermediate waypoints: 1.0 m / 90 degrees.
+    intermediate_goal_checker:
+      stateful: False
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 1.0
+      yaw_goal_tolerance: 1.5707963267948966
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -129,7 +130,59 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.5
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      # Check the rectangular body's swept outline, not only base_link.
+      # Permit a local detour when a moving obstacle occupies the global path,
+      # without making small scan fluctuations dominate path tracking.
+      ObstacleFootprint.scale: 0.10
+      BaseObstacle.scale: 0.75
+      GoalAlign.scale: 16.0
+      GoalAlign.forward_point_distance: 0.1
+      PathAlign.scale: 24.0
+      PathAlign.forward_point_distance: 0.1
+      PathDist.scale: 12.0
+      GoalDist.scale: 16.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+    # Intermediate waypoint controller uses the same DWB settings with a 1.0 m goal window.
+    FollowPathIntermediate:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      publish_evaluation: False
+      publish_trajectories: False
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      # Navigation target.  The downstream smoother retains 1.1 m/s of
+      # headroom so nominal 1.0 m/s commands are not clipped.
+      max_vel_x: 1.00
+      max_vel_y: 0.0
+      max_vel_theta: 1.00
+      min_speed_xy: 0.0
+      max_speed_xy: 1.00
+      min_speed_theta: 0.0
+      # Add high threshold velocity for turtlebot 3 issue.
+      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
+      acc_lim_x: 0.50
+      acc_lim_y: 0.0
+      acc_lim_theta: 0.80
+      decel_lim_x: -0.80
+      decel_lim_y: 0.0
+      decel_lim_theta: -0.80
+      vx_samples: 20
+      vy_samples: 1
+      vtheta_samples: 60
+      # At 1 m/s this evaluates a 3 m horizon, reducing late steering
+      # corrections on straight indoor runs.
+      sim_time: 3.0
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 1.0
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True

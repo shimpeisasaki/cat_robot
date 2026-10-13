@@ -13,6 +13,8 @@
   <exec_depend>emcl2</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_common</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_collision_monitor</exec_depend>
   <exec_depend>nav2_controller</exec_depend>
