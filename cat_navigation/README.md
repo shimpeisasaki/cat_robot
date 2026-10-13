@@ -2,6 +2,8 @@
 
 `cat_navigation` はNav2、SLAM、emcl2による自己位置推定、地図、waypoint巡回を管理する。機体、センサ、手動操作、安全停止は同じリポジトリの `cat_bringup` が管理する。`navigation.launch.py` と `mapping.launch.py` は機体も起動するため、`cat_bringup` を別途起動しない。
 
+実機確認（2026-10-13）：`use_zed:=true odom_source:=vio` でナビゲーションの走行を完走した。これは1回の完走確認であり、以前発生したRVizフリーズの原因までは特定していない。
+
 ## 導入とビルド
 
 ROS 2 Humbleを使用する。リポジトリの取得、依存ソースの導入、デバイス設定は [cat_robotの導入手順](../README.md) を参照する。LiDARドライバとemcl2のソースは `cat_robot/dependencies_lidar.repos` で取得する。
