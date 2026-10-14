@@ -2,7 +2,7 @@
 <package format="3">
   <name>cat_capture</name>
   <version>0.1.0</version>
-  <description>Action-driven RGB and point-cloud frame capture without stitching.</description>
+  <description>Action-driven RGB frame capture without stitching.</description>
   <maintainer email="todo@example.com">CAT maintainer</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>

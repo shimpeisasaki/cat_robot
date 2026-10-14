@@ -1,6 +1,6 @@
 /**:
   ros__parameters:
-    # Wheel odometry + calibrated gyro fusion, with RGB/point-cloud capture available.
+    # Wheel odometry + calibrated gyro fusion, with RGB capture available.
     # ZED Mini VGA is 672x376 per eye.
     general:
       # Fail a missing/disconnected camera promptly so zed_sensors.launch.py
@@ -23,7 +23,7 @@
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # Compute stereo depth for the point cloud without ZED positional tracking.
+      # Keep internal stereo depth processing without ZED positional tracking.
       depth_mode: 'PERFORMANCE'
       # Keep the ZED wrapper's depth confidence defaults; tighter filtering
       # removed too many floor points in the local costmap.
@@ -32,7 +32,7 @@
       publish_depth_map: false
       publish_depth_info: false
       point_cloud_freq: 10.0
-      publish_point_cloud: true
+      publish_point_cloud: false
       publish_depth_confidence: false
       publish_disparity: false
     sensors:

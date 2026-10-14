@@ -23,7 +23,7 @@
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # GEN_1 tracking and point cloud require stereo depth processing.
+      # GEN_1 tracking requires internal stereo depth processing.
       depth_mode: 'PERFORMANCE'
       # Keep the ZED wrapper's depth confidence defaults; tighter filtering
       # removed too many floor points in the local costmap.
@@ -32,7 +32,7 @@
       publish_depth_map: false
       publish_depth_info: false
       point_cloud_freq: 10.0
-      publish_point_cloud: true
+      publish_point_cloud: false
       publish_depth_confidence: false
       publish_disparity: false
     sensors:

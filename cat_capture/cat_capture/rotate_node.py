@@ -191,7 +191,7 @@ class PanoramaRotate(Node):
         self.pending = None
         if self.call('panorama'):
             self.drive_requested = True
-        self.get_logger().info('Panorama frames requested; waiting for motor, odometry, RGB and point cloud')
+        self.get_logger().info('Panorama frames requested; waiting for motor, odometry and RGB')
 
     def fresh(self, stamp, age=0.7):
         return time.monotonic() - stamp < age
@@ -351,7 +351,7 @@ class PanoramaRotate(Node):
             return
         if self.state == 'waiting':
             if now - self.started_at > 60:
-                self.abort('Motor, VIO or RGB/point cloud did not become ready within 60 s')
+                self.abort('Motor, VIO or RGB did not become ready within 60 s')
                 return
             if not self.drive_requested and self.pending is None and self.call('panorama'):
                 self.drive_requested = True
@@ -383,7 +383,7 @@ class PanoramaRotate(Node):
             self.abort('Odometry is stale')
             return
         if self.capture_status.get('state') in ('error', 'cancelled'):
-            self.abort(self.capture_status.get('error') or 'RGB/point-cloud capture failed')
+            self.abort(self.capture_status.get('error') or 'RGB capture failed')
             return
         tolerance = min(math.radians(2), self.step / 4)
         if self.state == 'prepare':

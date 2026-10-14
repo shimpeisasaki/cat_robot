@@ -86,7 +86,7 @@ ros2 service call /base_safety/free std_srvs/srv/Trigger '{}'
 | `/wheel_odom` | 車輪・IMU EKFによる推定値 |
 | `/odom` | 選択した推定値。`odom → base_link` のTFも配信 |
 | `/scan`、`/scan_raw` | フィルタ後のLiDAR、フィルタ前のLiDAR |
-| `/zed/zed_node/rgb/color/raw/image`、`/zed/zed_node/point_cloud/cloud_registered` | ZEDの未補正RGB画像、色付き点群。深度画像の配信は無効 |
+| `/zed/zed_node/rgb/color/raw/image` | ZEDの未補正RGB画像。深度画像・点群の配信は無効 |
 | `/base/state`、`/diagnostics` | モーター状態、電流・温度・異常の診断 |
 | `/cmd_vel_external`、`/cmd_vel_teleop`、`/cmd_vel_panorama` | 外部走行指令、平滑化済み手動指令、撮影旋回指令 |
 | `/cmd_vel_safe`、`/base_safety/mode` | 安全制御後の指令、ドライバへの動作許可 |
