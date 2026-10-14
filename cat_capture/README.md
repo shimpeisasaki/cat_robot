@@ -24,12 +24,10 @@ ros2 action send_goal /panorama/capture \
 
 ## 保存先と依存関係
 
-既定の保存先は `~/ros2_ws/data/d1_vision/mmdd_hh:mm_角度_枚数/` です。`f00_rgb.png` から順にRGB画像を保存します。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
+既定の保存先は `~/ros2_ws/data/d1_vision/mmdd_hh:mm_角度_枚数/` です。`f00_rgb.jpg` から順にJPEG品質95でRGB画像を保存します。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
 
 `panorama_rotate` は `/odom`、`/base/state`、`/base_safety/control_state` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/raw/image` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
 
-保存に成功したRGB画像は撮影番号とセッション名を付けて `/panorama_capture/frame` にも配信します。オンラインの画像判定はこのトピックから24枚を受け取れます。
-
-この画像配信と点群を使わない撮影は実機未検証です。
+撮影完了時に `/panorama_capture/status` で保存先を通知します。オンラインの画像判定は保存済みの24枚を読み込みます。このJPEG保存とオンライン連携は実機未検証です。
 
 開始サービスがタイムアウトした場合は遅れて届く応答を追跡し、成立した撮影セッションを取り消します。取り消しが確認されるまでは、新しい撮影要求を受け付けません。

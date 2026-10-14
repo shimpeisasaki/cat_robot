@@ -94,10 +94,6 @@ def generate_launch_description():
                 'serial_number': LaunchConfiguration('serial_number'),
                 'zed_config': LaunchConfiguration('zed_config'),
             }.items()),
-        Node(package='cat_bringup', executable='zed_publish_rate',
-             output='screen', condition=IfCondition(PythonExpression([
-                 "'", LaunchConfiguration('use_zed'), "' == 'true' and '",
-                 LaunchConfiguration('use_base'), "' == 'true'"]))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'rplidar_s1.launch.py'])),

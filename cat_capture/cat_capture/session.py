@@ -28,8 +28,13 @@ class CaptureSession:
 
     def capture(self, bgr):
         stem = f'f{len(self.frames):02d}'
-        rgb_path = self.path / f'{stem}_rgb.png'
-        if not cv2.imwrite(str(rgb_path), bgr):
+        rgb_path = self.path / f'{stem}_rgb.jpg'
+        try:
+            saved = cv2.imwrite(str(rgb_path), bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        except Exception:
+            rgb_path.unlink(missing_ok=True)
+            raise
+        if not saved:
             rgb_path.unlink(missing_ok=True)
             raise OSError(f'Could not save {rgb_path}')
         self.frames.append(rgb_path)

@@ -10,6 +10,7 @@ def test_saves_ordered_rgb_images(tmp_path):
     rgb = np.zeros((3, 4, 3), dtype=np.uint8)
     assert session.capture(rgb) == 1
     assert session.path.name.endswith('_120_10')
-    assert cv2.imread(str(session.path / 'f00_rgb.png')).shape == rgb.shape
+    assert cv2.imread(str(session.path / 'f00_rgb.jpg')).shape == rgb.shape
+    assert (session.path / 'f00_rgb.jpg').read_bytes().startswith(b'\xff\xd8')
     assert not list(session.path.glob('*.pcd'))
-    assert not list(session.path.glob('*.npy'))
+    assert not list(session.path.glob('*.png'))

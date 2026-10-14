@@ -12,7 +12,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from cat_panorama_interfaces.srv import StartCapture
-from cat_panorama_interfaces.msg import CapturedFrame
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -42,7 +41,6 @@ class PanoramaCapture(Node):
         self.create_subscription(Image, rgb_topic, self.receive_image, qos_profile_sensor_data)
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status = self.create_publisher(String, '~/status', qos)
-        self.captured_frame = self.create_publisher(CapturedFrame, '~/frame', 5)
         self.create_service(StartCapture, '~/start', self.start)
         for name in ('capture', 'finish', 'cancel'):
             self.create_service(Trigger, '~/' + name, getattr(self, name))
@@ -93,7 +91,7 @@ class PanoramaCapture(Node):
 
     def save_frame(self, rgb):
         image = self.bridge.imgmsg_to_cv2(rgb, desired_encoding='bgr8').copy()
-        return self.session.capture(image), rgb
+        return self.session.capture(image)
 
     def finish(self, _, response):
         if self.state != 'recording' or self.pending_capture:
@@ -125,14 +123,7 @@ class PanoramaCapture(Node):
                         self.state = 'complete'
                         self.get_logger().info(f'Saved panorama session: {result}')
                     else:
-                        self.frames, image = result
-                        frame = CapturedFrame()
-                        frame.session = str(self.session.path)
-                        frame.index = self.frames - 1
-                        frame.total_frames = self.session.total_frames
-                        frame.capture_angle_deg = self.session.capture_angle_deg
-                        frame.image = image
-                        self.captured_frame.publish(frame)
+                        self.frames = result
             except Exception as exc:
                 self.error, self.state = str(exc), 'error'
                 self.cancel_reason = self.cancel_reason or self.error
@@ -163,6 +154,8 @@ class PanoramaCapture(Node):
         self.status.publish(String(data=json.dumps({
             'state': self.state, 'ready': ready, 'frames': self.frames,
             'path': str(self.session.path) if self.session else '',
+            'total_frames': self.session.total_frames if self.session else 0,
+            'capture_angle_deg': self.session.capture_angle_deg if self.session else 0.0,
             'error': self.error, 'waiting_for': 'RGB image is stale' if not ready else '',
         })))
 
