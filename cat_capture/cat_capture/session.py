@@ -12,7 +12,7 @@ class CaptureSession:
         self.total_frames = frames
         root = Path(output_dir).expanduser().resolve()
         angle = f'{angle_deg:g}'
-        name = datetime.now(ZoneInfo('Asia/Tokyo')).strftime('%m%d_%H:%M')
+        name = datetime.now(ZoneInfo('Asia/Tokyo')).strftime('%Y%m%d_%H%M%S')
         name = f'{name}_{angle}_{frames}'
         root.mkdir(parents=True, exist_ok=True)
         for suffix in range(100):
@@ -26,9 +26,10 @@ class CaptureSession:
             raise FileExistsError(f'Too many capture sessions at {name}')
         self.frames = []
 
-    def capture(self, bgr):
+    def capture(self, bgr, angle_deg):
         stem = f'f{len(self.frames):02d}'
-        rgb_path = self.path / f'{stem}_rgb.jpg'
+        rounded_angle = round(angle_deg, 1) % 360
+        rgb_path = self.path / f'{stem}_{rounded_angle:05.1f}deg_rgb.jpg'
         try:
             saved = cv2.imwrite(str(rgb_path), bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
         except Exception:

@@ -6,7 +6,7 @@
       grab_resolution: 'VGA'
       grab_frame_rate: 30
       pub_resolution: 'NATIVE'
-      pub_frame_rate: 20.0
+      pub_frame_rate: 24.0
     video:
       # Publish both unrectified eyes; launch lens:=left|right selects one.
       # Rectified frames are retrieved only while those topics have subscribers.

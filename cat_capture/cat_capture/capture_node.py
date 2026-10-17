@@ -2,6 +2,7 @@
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 import json
+import math
 from pathlib import Path
 import time
 
@@ -12,6 +13,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from cat_panorama_interfaces.srv import StartCapture
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -30,6 +32,8 @@ class PanoramaCapture(Node):
         self.bridge = CvBridge()
         self.rgb_frames = {}
         self.rgb_at = 0.0
+        self.odom_frames = deque(maxlen=150)
+        self.first_yaw = None
         self.session = None
         self.frames = 0
         self.state = 'idle'
@@ -39,6 +43,7 @@ class PanoramaCapture(Node):
         self.jobs = deque()
         self.cancel_reason = None
         self.create_subscription(Image, rgb_topic, self.receive_image, qos_profile_sensor_data)
+        self.create_subscription(Odometry, '/odom', self.receive_odom, qos_profile_sensor_data)
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status = self.create_publisher(String, '~/status', qos)
         self.create_service(StartCapture, '~/start', self.start)
@@ -61,6 +66,36 @@ class PanoramaCapture(Node):
         if self.remember(self.rgb_frames, msg):
             self.rgb_at = time.monotonic()
 
+    def receive_odom(self, msg):
+        stamp = Time.from_msg(msg.header.stamp).nanoseconds
+        q = msg.pose.pose.orientation
+        if stamp <= 0 or not all(math.isfinite(v) for v in (q.x, q.y, q.z, q.w)):
+            return
+        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
+                         1 - 2 * (q.y * q.y + q.z * q.z))
+        if self.odom_frames:
+            previous_stamp, previous_yaw, previous_unwrapped = self.odom_frames[-1]
+            if stamp <= previous_stamp:
+                return
+            yaw = previous_unwrapped + math.atan2(math.sin(yaw - previous_yaw),
+                                                   math.cos(yaw - previous_yaw))
+        self.odom_frames.append((stamp, math.atan2(math.sin(yaw), math.cos(yaw)), yaw))
+
+    def image_yaw(self, stamp):
+        if not self.odom_frames or self.odom_frames[-1][0] < stamp:
+            return None
+        before = None
+        for sample in self.odom_frames:
+            if sample[0] >= stamp:
+                if before is None:
+                    return sample[2] if sample[0] - stamp <= 150_000_000 else None
+                if stamp - before[0] > 150_000_000 or sample[0] - stamp > 150_000_000:
+                    return None
+                fraction = (stamp - before[0]) / (sample[0] - before[0])
+                return before[2] + fraction * (sample[2] - before[2])
+            before = sample
+        return None
+
     def ready(self):
         return (bool(self.rgb_frames) and
                 time.monotonic() - self.rgb_at <= self.input_timeout)
@@ -74,6 +109,7 @@ class PanoramaCapture(Node):
             try:
                 self.session = CaptureSession(self.output_dir, request.angle_deg, request.frames)
                 self.frames, self.error, self.cancel_reason = 0, '', None
+                self.first_yaw = None
                 self.state = 'recording'
                 response.success, response.path = True, str(self.session.path)
                 response.message = 'Session started'
@@ -89,9 +125,9 @@ class PanoramaCapture(Node):
             response.success, response.message = True, 'Waiting for RGB image'
         return response
 
-    def save_frame(self, rgb):
+    def save_frame(self, rgb, angle_deg):
         image = self.bridge.imgmsg_to_cv2(rgb, desired_encoding='bgr8').copy()
-        return self.session.capture(image)
+        return self.session.capture(image, angle_deg)
 
     def finish(self, _, response):
         if self.state != 'recording' or self.pending_capture:
@@ -139,7 +175,7 @@ class PanoramaCapture(Node):
             min_stamp, requested_at, candidate = self.pending_capture
             if time.monotonic() - requested_at > self.capture_timeout:
                 self.pending_capture = None
-                self.error = 'Timed out waiting for RGB image'
+                self.error = 'Timed out waiting for RGB image or matching odometry'
                 self.state = 'error'
                 self.cancel_reason = self.error
             else:
@@ -148,8 +184,13 @@ class PanoramaCapture(Node):
                     if stamp is not None:
                         candidate = self.rgb_frames[stamp]
                 if candidate is not None:
-                    self.jobs.append(('capture', self.pool.submit(self.save_frame, candidate)))
-                    self.pending_capture = None
+                    yaw = self.image_yaw(Time.from_msg(candidate.header.stamp).nanoseconds)
+                    if yaw is not None:
+                        if self.first_yaw is None:
+                            self.first_yaw = yaw
+                        angle_deg = math.degrees(yaw - self.first_yaw)
+                        self.jobs.append(('capture', self.pool.submit(self.save_frame, candidate, angle_deg)))
+                        self.pending_capture = None
         ready = self.ready()
         self.status.publish(String(data=json.dumps({
             'state': self.state, 'ready': ready, 'frames': self.frames,

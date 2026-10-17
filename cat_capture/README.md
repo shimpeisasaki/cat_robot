@@ -24,7 +24,7 @@ ros2 action send_goal /panorama/capture \
 
 ## 保存先と依存関係
 
-既定の保存先は `~/ros2_ws/data/d1_vision/mmdd_hh:mm_角度_枚数/` です。`f00_rgb.jpg` から順にJPEG品質95でRGB画像を保存します。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
+既定の保存先は `~/ros2_ws/data/d1_vision/YYYYMMDD_HHMMSS_角度_枚数/` です。画像時刻に対応する `/odom` の向きから、最初の保存画像を0度とした角度を求め、`f00_000.0deg_rgb.jpg` のようにJPEG品質95で保存します。角度は0.1度単位に丸めます。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
 
 `panorama_rotate` は `/odom`、`/base/state`、`/base_safety/control_state` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/raw/image` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
 
