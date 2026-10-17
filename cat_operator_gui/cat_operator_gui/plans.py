@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import shlex
 import math
+import re
 
 import yaml
 
@@ -11,13 +12,13 @@ import yaml
 IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image'
 MAPPING_TOPICS = ['/scan', '/odom', '/tf', '/tf_static']
 PRESETS = {
+    '全トピック': [],
     '地図作成': MAPPING_TOPICS,
     '走行・ナビゲーション': MAPPING_TOPICS + [
         '/scan_raw', '/wheel/odom', '/map', '/localization/map', '/joy',
         '/cmd_vel_safe', '/base/state', '/diagnostics', '/base_safety/control_state',
         '/navigation/ready', '/waypoint_route/status'],
     'ZED画像評価': MAPPING_TOPICS + [IMAGE_TOPIC, '/zed/zed_node/rgb/color/raw/camera_info'],
-    '全トピック': [],
 }
 
 
@@ -25,7 +26,7 @@ PRESETS = {
 class Settings:
     mode: str = 'sensors'
     use_base: bool = True
-    use_zed: bool = False
+    use_zed: bool = True
     use_lidar: bool = True
     odom_source: str = 'wheel'
     lidar_port: str = '/dev/rplidar'
@@ -225,7 +226,7 @@ def mode_plan(settings, shares, live_domain=0):
     if s.mode == 'sensors':
         package, launch = 'cat_bringup', 'bringup.launch.py'
         args.update(use_base=str(s.use_base).lower(), use_lidar=str(s.use_lidar).lower(),
-                    rviz=str(s.rviz).lower(), enable_panorama='false', enable_motor_tools='false')
+                    rviz=str(s.rviz).lower(), enable_panorama='true', enable_motor_tools='false')
     else:
         package = 'cat_navigation'
         sources['内部の機体 launch'] = str(Path(shares['cat_bringup']) / 'launch/bringup.launch.py')
@@ -246,7 +247,7 @@ def mode_plan(settings, shares, live_domain=0):
                                       if s.waypoints else '')
             if s.waypoints:
                 yaml_file(s.waypoints)
-            args.update(slam='false', navigation_rviz=str(s.rviz).lower(), enable_panorama='false')
+            args.update(slam='false', navigation_rviz=str(s.rviz).lower(), enable_panorama='true')
             sources.update({'自己位置推定地図': args['localization_map'],
                             'ナビゲーション地図': args['navigation_map'],
                             'Nav2 YAML': args['params_file'],
@@ -269,17 +270,23 @@ def mode_plan(settings, shares, live_domain=0):
                  '依存パッケージのlaunchでは、各パッケージの既定設定も使われます。'])
 
 
-def record_plan(output, topics, record_all=False):
+def record_plan(output, topics, record_all=False, excluded=()):
     output = Path(output).expanduser().resolve()
     if output.exists():
         raise ValueError(f'保存先が既に存在します: {output}')
     topics = sorted(set(topics))
+    excluded = sorted(set(excluded))
+    if any(not topic.startswith('/') for topic in excluded):
+        raise ValueError('除外トピックは絶対名で指定してください')
+    topics = [topic for topic in topics if topic not in excluded]
     if not record_all and not topics:
         raise ValueError('記録するトピックを選択してください')
     command = ['ros2', 'bag', 'record', '--node-name', 'cat_gui_recorder', '-o', str(output)]
     command += ['--all'] if record_all else topics
+    if excluded:
+        command += ['--exclude', '|'.join(f'^{re.escape(topic)}$' for topic in excluded)]
     return Plan('rosbag収録', [JobSpec('record', command)], {'保存先': str(output)},
-                ['選択したトピックを収録します。終了時にはbagの書き出し完了を待ちます。'])
+                ['指定した除外トピックを除いて収録します。終了時にはbagの書き出し完了を待ちます。'])
 
 
 def save_map_plan(output, domain=None):

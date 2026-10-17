@@ -71,34 +71,29 @@ class DetailsDialog(QDialog):
 
 
 class TopicsDialog(QDialog):
-    def __init__(self, graph, selected, record_all, parent):
+    def __init__(self, graph, topics, excluded, record_all, parent):
         super().__init__(parent)
         self.setWindowTitle('記録トピックの詳細設定')
         self.resize(850, 600)
         layout = QVBoxLayout(self)
-        self.all_box = QCheckBox('全トピックを記録（収録開始後に現れるトピックも含む）')
-        self.all_box.setChecked(record_all)
-        layout.addWidget(self.all_box)
-        layout.addWidget(QLabel('未配信の選択トピックも、配信が始まると収録対象になります。'))
+        layout.addWidget(QLabel('チェックしたトピックを収録から除外します。全トピックでは後から現れるトピックも収録します。'))
         self.list = QListWidget()
-        for name in sorted(set(graph) | set(selected)):
+        for name in sorted((set(graph) if record_all else set(topics)) | set(excluded)):
             entry = graph.get(name, {})
             available = entry.get('publishers', 0)
             kind = ', '.join(entry.get('types', []))
             item = QListWidgetItem(f'{name}  [{available} publisher]  {kind}')
             item.setData(Qt.UserRole, name)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if record_all or name in selected else Qt.Unchecked)
+            item.setCheckState(Qt.Checked if name in excluded else Qt.Unchecked)
             self.list.addItem(item)
         layout.addWidget(self.list)
-        self.all_box.toggled.connect(lambda checked: self.list.setEnabled(not checked))
-        self.list.setEnabled(not record_all)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def selection(self):
+    def exclusions(self):
         return [self.list.item(i).data(Qt.UserRole) for i in range(self.list.count())
                 if self.list.item(i).checkState() == Qt.Checked]
 
@@ -124,8 +119,9 @@ class OperatorWindow(QMainWindow):
         self.last_device_update = 0.0
         self.stopping_mode = False
         self.fields = {}
-        self.selected_topics = set(MAPPING_TOPICS)
-        self.record_all = False
+        self.selected_topics = set()
+        self.excluded_topics = set()
+        self.record_all = True
         self.setWindowTitle('CAT Operator Console')
         self.resize(1120, 880)
         self.build_ui()
@@ -531,7 +527,7 @@ class OperatorWindow(QMainWindow):
     def record_plan(self):
         name = safe_name(self.bag_name.text().strip())
         output = Path(self.fields['data_dir'].text()).expanduser() / 'bags' / name
-        return record_plan(output, self.selected_topics, self.record_all)
+        return record_plan(output, self.selected_topics, self.record_all, self.excluded_topics)
 
     def start_recording(self):
         try:
@@ -545,7 +541,8 @@ class OperatorWindow(QMainWindow):
             Path(plan.sources['保存先']).parent.mkdir(parents=True, exist_ok=True)
             self.record_selection = {
                 'preset': self.presets.currentText(), 'topics': sorted(self.selected_topics),
-                'all_topics': self.record_all, 'settings': asdict(self.collect()),
+                'all_topics': self.record_all, 'excluded_topics': sorted(self.excluded_topics),
+                'settings': asdict(self.collect()),
                 'started_at': timestamp(), 'output': plan.sources['保存先']}
             (self.log_dir / ('record_' + timestamp() + '.json')).write_text(
                 json.dumps(self.record_selection, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -558,21 +555,25 @@ class OperatorWindow(QMainWindow):
     def select_preset(self, name):
         self.record_all = name == '全トピック'
         self.selected_topics = set(PRESETS.get(name, self.settings.custom_presets.get(name, [])))
+        self.excluded_topics = set()
         self.update_topic_summary()
 
     def update_topic_summary(self):
-        text = '全トピックを記録' if self.record_all else '\n'.join(sorted(self.selected_topics))
-        missing = set(MAPPING_TOPICS) - self.selected_topics
-        if missing and not self.record_all:
+        text = ('全トピックを記録' if self.record_all else
+                '収録対象:\n' + '\n'.join(sorted(self.selected_topics - self.excluded_topics)))
+        if self.excluded_topics:
+            text += '\n除外:\n' + '\n'.join(sorted(self.excluded_topics))
+        missing = (set(MAPPING_TOPICS) & self.excluded_topics if self.record_all else
+                   set(MAPPING_TOPICS) - (self.selected_topics - self.excluded_topics))
+        if missing:
             text += '\nオフライン地図作成に必要なトピック未選択: ' + ', '.join(sorted(missing))
         self.topic_summary.setText(text)
 
     def edit_topics(self):
         dialog = TopicsDialog(self.live_snapshot.get('topics', {}), self.selected_topics,
-                              self.record_all, self)
+                              self.excluded_topics, self.record_all, self)
         if dialog.exec_() == QDialog.Accepted:
-            self.selected_topics = set(dialog.selection())
-            self.record_all = dialog.all_box.isChecked()
+            self.excluded_topics = set(dialog.exclusions())
             self.update_topic_summary()
 
     def save_preset(self):
@@ -585,7 +586,7 @@ class OperatorWindow(QMainWindow):
             if name in PRESETS:
                 self.error('標準プリセットと異なる名前にしてください')
                 return
-            self.settings.custom_presets[name] = sorted(self.selected_topics)
+            self.settings.custom_presets[name] = sorted(self.selected_topics - self.excluded_topics)
             if self.presets.findText(name) < 0:
                 self.presets.addItem(name)
             self.presets.setCurrentText(name)

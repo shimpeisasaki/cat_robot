@@ -50,7 +50,7 @@ def test_map_inputs_checked_before_start(configuration, tmp_path):
     plan = mode_plan(settings, shares)
     assert f'waypoints_file:={settings.waypoints}' in plan.jobs[0].command
     assert plan.sources['巡回ルート YAML'] == settings.waypoints
-    assert 'enable_panorama:=false' in plan.jobs[0].command
+    assert 'enable_panorama:=true' in plan.jobs[0].command
     image = tmp_path / 'map.pgm'
     image.write_text('P2\n1 1\n255\n0\n')
     modified = tmp_path / 'modified.yaml'
@@ -182,8 +182,8 @@ def test_settings_roundtrip_and_offscreen_widgets(configuration, tmp_path):
         assert window.presets.findText('画像のみ') >= 0
         window.presets.setCurrentText('画像のみ')
         assert window.selected_topics == {'/camera/image'}
-        dialog = TopicsDialog({}, ['/camera/image'], False, window)
-        assert dialog.selection() == ['/camera/image']
+        dialog = TopicsDialog({}, ['/camera/image'], [], False, window)
+        assert dialog.exclusions() == []
         assert window.collect().data_dir == str(tmp_path)
         assert window.live is None
     finally:
