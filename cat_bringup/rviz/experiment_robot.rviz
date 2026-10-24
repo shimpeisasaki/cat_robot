@@ -155,6 +155,10 @@ Visualization Manager:
         Value: true
       RPLIDAR_custom:
         Value: true
+      VLP16_F:
+        Value: true
+      VLP16_B:
+        Value: true
       left_wheel_link:
         Value: true
       right_wheel_link:
@@ -187,6 +191,8 @@ Visualization Manager:
         RPLIDAR_F: {}
         RPLIDAR_B: {}
         RPLIDAR_custom: {}
+        VLP16_F: {}
+        VLP16_B: {}
         left_wheel_link: {}
         right_wheel_link: {}
         safety_footprint_link: {}

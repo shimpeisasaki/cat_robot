@@ -67,7 +67,7 @@ def filter_cloud(cloud, rotation, front_angle, front_min, rear_min):
 class Vlp16SectorFilter(Node):
     def __init__(self):
         super().__init__('vlp16_sector_filter')
-        self.frame = self.declare_parameter('scan_frame', 'vlp16').value
+        self.frame = self.declare_parameter('scan_frame', 'VLP16_B').value
         angles = [float(self.declare_parameter(name, default).value) for name, default in (
             ('mounting_roll', 0.0), ('mounting_pitch', math.radians(7)),
             ('mounting_yaw', 0.0))]

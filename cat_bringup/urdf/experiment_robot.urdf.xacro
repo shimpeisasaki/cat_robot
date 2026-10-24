@@ -97,11 +97,16 @@
             rpy="$(arg rplidar_roll) 0 $(arg rplidar_yaw)"/>
   </joint>
 
-  <!-- VLP-16 laser reference, 18.6 mm forward and 207 mm high, tilted down 7 deg. -->
-  <link name="vlp16"/>
-  <joint name="vlp16_joint" type="fixed">
-    <parent link="base_link"/><child link="vlp16"/>
+  <!-- VLP-16 front and rear mounting positions. -->
+  <link name="VLP16_F"/>
+  <joint name="VLP16_F_joint" type="fixed">
+    <parent link="base_link"/><child link="VLP16_F"/>
     <origin xyz="0.0186 0 0.207" rpy="0 ${7*pi/180} 0"/>
+  </joint>
+  <link name="VLP16_B"/>
+  <joint name="VLP16_B_joint" type="fixed">
+    <parent link="base_link"/><child link="VLP16_B"/>
+    <origin xyz="-0.347981 0 0.515158" rpy="${pi} ${20*pi/180} ${pi/2}"/>
   </joint>
 
   <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.

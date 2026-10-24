@@ -4,7 +4,7 @@ velodyne_driver_node:
     port: 2368
     model: VLP16
     rpm: 600.0
-    frame_id: vlp16
+    frame_id: VLP16_B
     gps_time: false
     timestamp_first_packet: false
 
@@ -19,11 +19,11 @@ velodyne_transform_node:
 
 vlp16_sector_filter:
   ros__parameters:
-    scan_frame: vlp16
-    # Must match the base_link -> vlp16 joint orientation in the URDF.
-    mounting_roll: 0.0
-    mounting_pitch: 0.12217304763960307
-    mounting_yaw: 0.0
+    scan_frame: VLP16_B
+    # Must match the selected base_link -> VLP16_F/B joint in the URDF.
+    mounting_roll: 3.141592653589793
+    mounting_pitch: 0.3490658503988659
+    mounting_yaw: 1.5707963267948966
     front_angle_deg: 270.0
     front_min_range: 0.1
     rear_min_range: 0.6

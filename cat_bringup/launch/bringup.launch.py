@@ -49,6 +49,8 @@ def generate_launch_description():
                               choices=['rplidar', 'vlp16', 'both']),
         DeclareLaunchArgument('vlp16_config', default_value=PathJoinSubstitution([
             share, 'config', 'vlp16.yaml'])),
+        DeclareLaunchArgument('vlp16_mount', default_value='back',
+                              choices=['front', 'back']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_panorama', default_value='true', choices=['true', 'false']),
@@ -140,6 +142,7 @@ def generate_launch_description():
                 "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
                 LaunchConfiguration('lidar_source'), "' in ('vlp16', 'both')"])),
             launch_arguments={'config': LaunchConfiguration('vlp16_config'),
+                              'mount': LaunchConfiguration('vlp16_mount'),
                               'show_rviz': 'false'}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
