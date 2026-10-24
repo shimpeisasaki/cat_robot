@@ -1,0 +1,18 @@
+velodyne_driver_node:
+  ros__parameters:
+    device_ip: 192.168.0.201
+    port: 2368
+    model: VLP16
+    rpm: 600.0
+    frame_id: vlp16
+    gps_time: false
+    timestamp_first_packet: false
+
+velodyne_transform_node:
+  ros__parameters:
+    model: VLP16
+    min_range: 0.9
+    max_range: 130.0
+    fixed_frame: ""
+    target_frame: ""
+    organize_cloud: true

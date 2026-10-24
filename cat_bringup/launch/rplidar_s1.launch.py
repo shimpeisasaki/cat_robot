@@ -7,6 +7,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.actions import SetRemap
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -14,6 +15,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('frame_id', default_value='laser'),
+        DeclareLaunchArgument('mounting_yaw', default_value='3.141592653589793'),
         GroupAction(actions=[
           SetRemap(src='/scan', dst='/scan_raw'),
           IncludeLaunchDescription(
@@ -32,5 +34,7 @@ def generate_launch_description():
             name='sector_scan_filter', output='screen',
             parameters=[PathJoinSubstitution([
                 FindPackageShare('cat_bringup'), 'config', 'scan_filter.yaml']),
-                {'scan_frame': LaunchConfiguration('frame_id')}]),
+                {'scan_frame': LaunchConfiguration('frame_id'),
+                 'mounting_yaw': ParameterValue(LaunchConfiguration('mounting_yaw'),
+                                                value_type=float)}]),
     ])

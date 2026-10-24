@@ -5,6 +5,10 @@ repositories:
     type: git
     url: https://github.com/Slamtec/sllidar_ros2.git
     version: 34300099fadfc772965962dec837bf436706188f
+  velodyne:
+    type: git
+    url: https://github.com/ros-drivers/velodyne.git
+    version: 0f2a3bb1dde4fa91cbafad8a3f9f89b66c2a1350
   zed-ros2-wrapper:
     type: git
     url: https://github.com/shimpeisasaki/zed-ros2-wrapper.git

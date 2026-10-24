@@ -1,6 +1,10 @@
 <?xml version="1.0"?>
 <robot name="experiment_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:arg name="use_zed" default="true"/>
+  <xacro:arg name="rplidar_x" default="0.03319"/>
+  <xacro:arg name="rplidar_y" default="0"/>
+  <xacro:arg name="rplidar_z" default="0.24883"/>
+  <xacro:arg name="rplidar_yaw" default="3.141592653589793"/>
   <!-- Measurements are expressed from the drive-axle midpoint at ground level. -->
   <xacro:property name="wheel_radius" value="0.050"/>
   <xacro:property name="wheel_width" value="0.040"/>
@@ -74,13 +78,19 @@
     <parent link="base_link"/><child link="safety_footprint_link"/>
   </joint>
 
-  <!-- RPLIDAR S1 scan origin (rotating laser axis), not its bottom mounting face.
-       Measured from base_link: 33.19 mm forward, centered, 248.83 mm above ground. -->
+  <!-- RPLIDAR S1 scan origin. Defaults preserve the previous measured mount. -->
   <link name="laser"/>
   <joint name="laser_joint" type="fixed">
     <parent link="base_link"/><child link="laser"/>
-    <!-- The scanner's +X direction faces the rear of the vehicle. -->
-    <origin xyz="0.03319 0 0.24883" rpy="0 0 ${pi}"/>
+    <origin xyz="$(arg rplidar_x) $(arg rplidar_y) $(arg rplidar_z)"
+            rpy="0 0 $(arg rplidar_yaw)"/>
+  </joint>
+
+  <!-- VLP-16 laser reference, 18.6 mm forward and 207 mm high, tilted down 7 deg. -->
+  <link name="vlp16"/>
+  <joint name="vlp16_joint" type="fixed">
+    <parent link="base_link"/><child link="vlp16"/>
+    <origin xyz="0.0186 0 0.207" rpy="0 ${7*pi/180} 0"/>
   </joint>
 
   <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.

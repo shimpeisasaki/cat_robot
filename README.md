@@ -54,15 +54,29 @@ ros2 launch cat_bringup bringup.launch.py
 | 引数 | 既定値 | 用途 |
 |---|---|---|
 | `use_base`, `use_lidar`, `use_zed` | `true` | 駆動部、LiDAR、ZEDの有効化 |
+| `lidar_source` | `rplidar` | `rplidar`、`vlp16`、`both` から起動するLiDARを選択 |
 | `odom_source` | `vio` | `vio` または `wheel`。`wheel` は車輪・IMUの推定値を使用 |
 | `use_gnss` | `false` | GNSSの有効化 |
-| `serial_port` | `/dev/rplidar` | LiDARのシリアルポート |
+| `serial_port` | `/dev/rplidar` | RPLIDARのシリアルポート |
+| `rplidar_mount` | `legacy` | 旧取付位置。`custom` で `rplidar_x/y/z/yaw` を使用（m、rad） |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
 | `enable_joystick`, `rviz` | `true` | 操作入力と表示 |
 | `enable_panorama` | `true` | 24方向のRGB画像を保存する撮影アクション。画像合成は行わない |
 | `robot_config` | パッケージ内の `robot.yaml` | 機体設定ファイル |
 
 ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。ZEDとGNSSを使う構成には、それぞれのROSパッケージが必要である。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
+
+### VLP-16
+
+ROS 2 HumbleのVelodyne上流パッケージは `src/velodyne` に独立して置く。`dependencies.repos` と `dependencies_lidar.repos` はリリース2.5.1を固定している。ビルド前に `libpcap0.8-dev`（または `libpcap-dev`）を導入し、`colcon build --symlink-install --packages-up-to cat_bringup velodyne_driver velodyne_pointcloud` を実行する。
+
+この機体のVLP-16はセンサIP `192.168.0.201/24`、送信先 `192.168.0.100`、データポート `2368`、回転数600 rpmである。PCのUSB LANアダプタに `192.168.0.100/24` を設定し、ゲートウェイは設定しない。このPCではインターフェース `enx6c1ff7cbb97f` のNetworkManager接続 `VLP16 USB Ethernet` に保存済みで、Wi-Fiがデフォルト経路を維持する。センサ側の値が異なる場合は `cat_bringup/config/vlp16.yaml` を合わせる。
+
+モータを起動せずに点群を確認するには `ros2 launch cat_bringup vlp16.launch.py show_rviz:=true` を使う。`/velodyne_packets` と `/velodyne_points` を配信し、RVizのFixed Frameは `vlp16` に設定される。通常の機体起動では `lidar_source:=rplidar`、`lidar_source:=vlp16`、`lidar_source:=both` を指定する。`both` でもRPLIDARの `/scan` とVLP-16の `/velodyne_points` は別トピックである。`use_lidar:=false` は両方を起動しない。
+
+`base_link` からVLP-16計測原点へのTFは前方0.0186 m、中央、高さ0.207 m、前傾7°である。RPLIDARの旧取付位置は `rplidar_mount:=legacy` で維持する。移設後の実測値を使う場合は `rplidar_mount:=custom rplidar_x:=... rplidar_y:=... rplidar_z:=... rplidar_yaw:=...` を指定する。`rplidar_yaw` はセクタフィルタにも同じ値を渡す。移設後の値は未測定であり、旧位置を現在の取付位置として扱わない。
+
+現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。
 
 ## 操作と停止
 

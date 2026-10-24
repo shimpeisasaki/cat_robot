@@ -25,6 +25,8 @@ ros2 launch cat_navigation navigation.launch.py
 
 既定は `use_zed:=false odom_source:=wheel` で、車輪オドメトリと2D LiDARを使う。ZEDのVIOを使う場合は `use_zed:=true odom_source:=vio` を指定する。撮影機能は既定で無効で、必要な場合は `enable_panorama:=true` を指定する。
 
+`lidar_source:=both` でRPLIDARの `/scan` を使いながらVLP-16の `/velodyne_points` も起動できる。地図作成・自己位置推定・安全監視は引き続きRPLIDARの `/scan` を使うため、`vlp16` 単独はこの起動では選択できない。RPLIDARの旧取付位置は `rplidar_mount:=legacy` で復元できる。移設後の位置を使う場合は `rplidar_mount:=custom` と `rplidar_x/y/z/yaw` の実測値を指定する。
+
 既定では `slam:=false` とし、以下のファイルをパッケージ内の `map/` から読み込む。
 
 | 用途 | 既定ファイル | ROSトピック |

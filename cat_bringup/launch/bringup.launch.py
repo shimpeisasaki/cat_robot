@@ -10,11 +10,21 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
+def rplidar_mount_value(argument, legacy):
+    return PythonExpression([
+        "'", legacy, "' if '", LaunchConfiguration('rplidar_mount'),
+        "' == 'legacy' else '", LaunchConfiguration(argument), "'"])
+
+
 def generate_launch_description():
     share = FindPackageShare('cat_bringup')
     robot_config = LaunchConfiguration('robot_config')
     manual_config = LaunchConfiguration('manual_config')
     model = PathJoinSubstitution([share, 'urdf', 'experiment_robot.urdf.xacro'])
+    rplidar_x = rplidar_mount_value('rplidar_x', '0.03319')
+    rplidar_y = rplidar_mount_value('rplidar_y', '0')
+    rplidar_z = rplidar_mount_value('rplidar_z', '0.24883')
+    rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793')
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
@@ -22,9 +32,19 @@ def generate_launch_description():
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
+        DeclareLaunchArgument('rplidar_mount', default_value='legacy',
+                              choices=['legacy', 'custom']),
+        DeclareLaunchArgument('rplidar_x', default_value='0.03319'),
+        DeclareLaunchArgument('rplidar_y', default_value='0'),
+        DeclareLaunchArgument('rplidar_z', default_value='0.24883'),
+        DeclareLaunchArgument('rplidar_yaw', default_value='3.141592653589793'),
         DeclareLaunchArgument('require_navigation', default_value='false'),
         DeclareLaunchArgument('enable_motor_tools', default_value='false'),
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('lidar_source', default_value='rplidar',
+                              choices=['rplidar', 'vlp16', 'both']),
+        DeclareLaunchArgument('vlp16_config', default_value=PathJoinSubstitution([
+            share, 'config', 'vlp16.yaml'])),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_panorama', default_value='true', choices=['true', 'false']),
@@ -39,7 +59,9 @@ def generate_launch_description():
                 LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
-                Command(['xacro ', model, ' use_zed:=', LaunchConfiguration('use_zed')]),
+                Command(['xacro ', model, ' use_zed:=', LaunchConfiguration('use_zed'),
+                         ' rplidar_x:=', rplidar_x, ' rplidar_y:=', rplidar_y,
+                         ' rplidar_z:=', rplidar_z, ' rplidar_yaw:=', rplidar_yaw]),
                 value_type=str)}], output='screen'),
         Node(package='ddsm115_controller', executable='base_driver',
              name='base_driver', parameters=[robot_config, {
@@ -97,8 +119,19 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'rplidar_s1.launch.py'])),
-            condition=IfCondition(LaunchConfiguration('use_lidar')),
-            launch_arguments={'serial_port': LaunchConfiguration('serial_port')}.items()),
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
+                LaunchConfiguration('lidar_source'), "' in ('rplidar', 'both')"])),
+            launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
+                              'mounting_yaw': rplidar_yaw}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                share, 'launch', 'vlp16.launch.py'])),
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
+                LaunchConfiguration('lidar_source'), "' in ('vlp16', 'both')"])),
+            launch_arguments={'config': LaunchConfiguration('vlp16_config'),
+                              'show_rviz': 'false'}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),
