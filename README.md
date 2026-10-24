@@ -74,7 +74,7 @@ ROS 2 HumbleのVelodyne上流パッケージは `src/velodyne` に独立して�
 
 モータを起動せずに点群を確認するには `ros2 launch cat_bringup vlp16.launch.py show_rviz:=true` を使う。`/velodyne_packets` と `/velodyne_points` を配信し、RVizのFixed Frameは `vlp16` に設定される。通常の機体起動では `lidar_source:=rplidar`、`lidar_source:=vlp16`、`lidar_source:=both` を指定する。`both` でもRPLIDARの `/scan` とVLP-16の `/velodyne_points` は別トピックである。`use_lidar:=false` は両方を起動しない。
 
-`base_link` からVLP-16計測原点へのTFは前方0.0186 m、中央、高さ0.207 m、前傾7°である。RPLIDARの旧位置 `RPLIDAR_F` は x=0.03319 m、z=0.24883 m、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=-90°（右向き）である。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `back`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
+`base_link` からVLP-16計測原点へのTFは前方0.0186 m、中央、高さ0.207 m、前傾7°である。RPLIDARの旧位置 `RPLIDAR_F` は x=0.03319 m、z=0.24883 m、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=+90°である。yawはRVizで確認した前後の向きに合わせて180°補正した。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `back`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
 
 現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。
 

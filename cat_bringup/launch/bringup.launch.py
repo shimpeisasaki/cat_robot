@@ -23,7 +23,7 @@ def generate_launch_description():
     manual_config = LaunchConfiguration('manual_config')
     model = PathJoinSubstitution([share, 'urdf', 'experiment_robot.urdf.xacro'])
     rplidar_roll = rplidar_mount_value('rplidar_roll', '0', '3.141592653589793')
-    rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793', '-1.5707963267948966')
+    rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793', '1.5707963267948966')
     rplidar_frame = PythonExpression([
         "'RPLIDAR_F' if '", LaunchConfiguration('rplidar_mount'),
         "' in ('front', 'legacy') else ('RPLIDAR_B' if '", LaunchConfiguration('rplidar_mount'),

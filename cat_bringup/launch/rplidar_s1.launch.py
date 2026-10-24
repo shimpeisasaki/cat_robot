@@ -16,7 +16,7 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('frame_id', default_value='RPLIDAR_B'),
         DeclareLaunchArgument('mounting_roll', default_value='3.141592653589793'),
-        DeclareLaunchArgument('mounting_yaw', default_value='-1.5707963267948966'),
+        DeclareLaunchArgument('mounting_yaw', default_value='1.5707963267948966'),
         GroupAction(actions=[
           SetRemap(src='/scan', dst='/scan_raw'),
           IncludeLaunchDescription(

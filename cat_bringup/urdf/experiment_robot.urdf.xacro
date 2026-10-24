@@ -88,7 +88,7 @@
   <link name="RPLIDAR_B"/>
   <joint name="RPLIDAR_B_joint" type="fixed">
     <parent link="base_link"/><child link="RPLIDAR_B"/>
-    <origin xyz="-0.3095 0 0.49735" rpy="${pi} 0 ${-pi/2}"/>
+    <origin xyz="-0.3095 0 0.49735" rpy="${pi} 0 ${pi/2}"/>
   </joint>
   <link name="RPLIDAR_custom"/>
   <joint name="RPLIDAR_custom_joint" type="fixed">
