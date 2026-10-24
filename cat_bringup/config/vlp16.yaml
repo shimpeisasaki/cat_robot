@@ -21,9 +21,9 @@ vlp16_sector_filter:
   ros__parameters:
     scan_frame: VLP16_B
     # Must match the selected base_link -> VLP16_F/B joint in the URDF.
-    mounting_roll: 3.490658503988659
+    mounting_roll: 2.792526803190927
     mounting_pitch: 0.0
-    mounting_yaw: 1.5707963267948966
+    mounting_yaw: -1.5707963267948966
     front_angle_deg: 270.0
     front_min_range: 0.1
     rear_min_range: 0.6

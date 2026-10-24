@@ -106,7 +106,7 @@
   <link name="VLP16_B"/>
   <joint name="VLP16_B_joint" type="fixed">
     <parent link="base_link"/><child link="VLP16_B"/>
-    <origin xyz="-0.347981 0 0.515158" rpy="${(180+20)*pi/180} 0 ${pi/2}"/>
+    <origin xyz="-0.347981 0 0.515158" rpy="${(180-20)*pi/180} 0 ${-pi/2}"/>
   </joint>
 
   <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.

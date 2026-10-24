@@ -14,10 +14,10 @@ def generate_launch_description():
     config = LaunchConfiguration('config')
     mount = LaunchConfiguration('mount')
     frame = PythonExpression(["'VLP16_F' if '", mount, "' == 'front' else 'VLP16_B'"])
-    roll = PythonExpression(["0.0 if '", mount, "' == 'front' else 3.490658503988659"])
+    roll = PythonExpression(["0.0 if '", mount, "' == 'front' else 2.792526803190927"])
     pitch = PythonExpression(["0.12217304763960307 if '", mount, "' == 'front' else 0.0"])
     yaw = PythonExpression(["3.141592653589793 if '", mount,
-                            "' == 'front' else 1.5707963267948966"])
+                            "' == 'front' else -1.5707963267948966"])
     calibration = PathJoinSubstitution([
         FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])
     rviz_config = PythonExpression([
