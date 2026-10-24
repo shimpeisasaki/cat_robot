@@ -14,8 +14,9 @@ def generate_launch_description():
     sllidar_share = FindPackageShare('sllidar_ros2')
     return LaunchDescription([
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
-        DeclareLaunchArgument('frame_id', default_value='laser'),
-        DeclareLaunchArgument('mounting_yaw', default_value='3.141592653589793'),
+        DeclareLaunchArgument('frame_id', default_value='RPLIDAR_B'),
+        DeclareLaunchArgument('mounting_roll', default_value='3.141592653589793'),
+        DeclareLaunchArgument('mounting_yaw', default_value='-1.5707963267948966'),
         GroupAction(actions=[
           SetRemap(src='/scan', dst='/scan_raw'),
           IncludeLaunchDescription(
@@ -35,6 +36,8 @@ def generate_launch_description():
             parameters=[PathJoinSubstitution([
                 FindPackageShare('cat_bringup'), 'config', 'scan_filter.yaml']),
                 {'scan_frame': LaunchConfiguration('frame_id'),
+                 'mounting_roll': ParameterValue(LaunchConfiguration('mounting_roll'),
+                                                 value_type=float),
                  'mounting_yaw': ParameterValue(LaunchConfiguration('mounting_yaw'),
                                                 value_type=float)}]),
     ])

@@ -9,10 +9,10 @@ from sensor_msgs.msg import LaserScan
 
 
 def filter_ranges(ranges, angle_min, angle_increment, mounting_yaw,
-                  front_angle, front_min, rear_min):
+                  front_angle, front_min, rear_min, angle_direction=1.0):
     result = list(ranges)
     for i, distance in enumerate(ranges):
-        bearing = angle_min + i * angle_increment + mounting_yaw
+        bearing = angle_direction * (angle_min + i * angle_increment) + mounting_yaw
         bearing = math.atan2(math.sin(bearing), math.cos(bearing))
         threshold = front_min if abs(bearing) <= front_angle / 2 + 1e-9 else rear_min
         # Treat excluded returns as unknown, never as free space (+infinity).
@@ -25,24 +25,28 @@ def filter_ranges(ranges, angle_min, angle_increment, mounting_yaw,
 class SectorScanFilter(Node):
     def __init__(self):
         super().__init__('sector_scan_filter')
-        self.frame = self.declare_parameter('scan_frame', 'laser').value
+        self.frame = self.declare_parameter('scan_frame', 'RPLIDAR_B').value
+        self.roll = float(self.declare_parameter('mounting_roll', math.pi).value)
         self.yaw = float(self.declare_parameter('mounting_yaw', math.pi).value)
         self.front_angle = math.radians(float(
             self.declare_parameter('front_angle_deg', 200.0).value))
         self.front_min = float(self.declare_parameter('front_min_range', 0.1).value)
         self.rear_min = float(self.declare_parameter('rear_min_range', 0.4).value)
         if (not all(math.isfinite(v) for v in
-                    [self.yaw, self.front_angle, self.front_min, self.rear_min]) or
+                    [self.roll, self.yaw, self.front_angle, self.front_min, self.rear_min]) or
+                min(abs(self.roll), abs(abs(self.roll) - math.pi)) > 1e-5 or
                 not 0 < self.front_angle <= 2 * math.pi or
                 min(self.front_min, self.rear_min) < 0):
             raise ValueError('Invalid angular range filter parameters')
+        self.angle_direction = 1.0 if abs(self.roll) < 1e-5 else -1.0
         self.pub = self.create_publisher(LaserScan, '/scan', qos_profile_sensor_data)
         self.sub = self.create_subscription(
             LaserScan, '/scan_raw', self.receive, qos_profile_sensor_data)
         self.get_logger().info(
             f'Vehicle front {math.degrees(self.front_angle):.0f} deg: '
             f'{self.front_min:.3f} m; rear: {self.rear_min:.3f} m; '
-            f'laser mounting yaw {math.degrees(self.yaw):.0f} deg')
+            f'laser mounting roll {math.degrees(self.roll):.0f} deg, '
+            f'yaw {math.degrees(self.yaw):.0f} deg')
 
     def receive(self, scan):
         if scan.header.frame_id != self.frame:
@@ -51,7 +55,7 @@ class SectorScanFilter(Node):
             return
         scan.ranges = filter_ranges(
             scan.ranges, scan.angle_min, scan.angle_increment, self.yaw,
-            self.front_angle, self.front_min, self.rear_min)
+            self.front_angle, self.front_min, self.rear_min, self.angle_direction)
         # Keep stamp, frame, range_min/max, angles and timing unchanged.
         self.pub.publish(scan)
 

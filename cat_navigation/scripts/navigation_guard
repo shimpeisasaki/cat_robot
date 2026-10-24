@@ -20,7 +20,7 @@ class NavigationGuard(Node):
         super().__init__('navigation_guard')
         self.scan_max_age = self.declare_parameter('scan_max_age', .3).value
         self.scan_timeout = self.declare_parameter('scan_timeout', .5).value
-        self.scan_frame = self.declare_parameter('scan_frame', 'laser').value
+        self.scan_frame = self.declare_parameter('scan_frame', 'RPLIDAR_B').value
         # EMCL future-dates map -> odom by transform_tolerance (default 0.2s).
         self.map_tf_future_tolerance = self.declare_parameter('map_tf_future_tolerance', .3).value
         if not all(math.isfinite(v) and v > 0 for v in (self.scan_max_age, self.scan_timeout)):

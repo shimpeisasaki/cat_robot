@@ -5,6 +5,7 @@
   <xacro:arg name="rplidar_y" default="0"/>
   <xacro:arg name="rplidar_z" default="0.24883"/>
   <xacro:arg name="rplidar_yaw" default="3.141592653589793"/>
+  <xacro:arg name="rplidar_roll" default="0"/>
   <!-- Measurements are expressed from the drive-axle midpoint at ground level. -->
   <xacro:property name="wheel_radius" value="0.050"/>
   <xacro:property name="wheel_width" value="0.040"/>
@@ -78,12 +79,22 @@
     <parent link="base_link"/><child link="safety_footprint_link"/>
   </joint>
 
-  <!-- RPLIDAR S1 scan origin. Defaults preserve the previous measured mount. -->
-  <link name="laser"/>
-  <joint name="laser_joint" type="fixed">
-    <parent link="base_link"/><child link="laser"/>
+  <!-- RPLIDAR S1 mounting positions; /scan uses the selected frame only. -->
+  <link name="RPLIDAR_F"/>
+  <joint name="RPLIDAR_F_joint" type="fixed">
+    <parent link="base_link"/><child link="RPLIDAR_F"/>
+    <origin xyz="0.03319 0 0.24883" rpy="0 0 ${pi}"/>
+  </joint>
+  <link name="RPLIDAR_B"/>
+  <joint name="RPLIDAR_B_joint" type="fixed">
+    <parent link="base_link"/><child link="RPLIDAR_B"/>
+    <origin xyz="-0.3095 0 0.49735" rpy="${pi} 0 ${-pi/2}"/>
+  </joint>
+  <link name="RPLIDAR_custom"/>
+  <joint name="RPLIDAR_custom_joint" type="fixed">
+    <parent link="base_link"/><child link="RPLIDAR_custom"/>
     <origin xyz="$(arg rplidar_x) $(arg rplidar_y) $(arg rplidar_z)"
-            rpy="0 0 $(arg rplidar_yaw)"/>
+            rpy="$(arg rplidar_roll) 0 $(arg rplidar_yaw)"/>
   </joint>
 
   <!-- VLP-16 laser reference, 18.6 mm forward and 207 mm high, tilted down 7 deg. -->

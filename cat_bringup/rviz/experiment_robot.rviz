@@ -74,7 +74,15 @@ Visualization Manager:
         Show Axes: false
         Show Trail: false
         Value: true
-      laser:
+      RPLIDAR_F:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+      RPLIDAR_B:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+      RPLIDAR_custom:
         Alpha: 1
         Show Axes: false
         Show Trail: false
@@ -141,7 +149,11 @@ Visualization Manager:
         Value: true
       gnss_antenna_link:
         Value: true
-      laser:
+      RPLIDAR_F:
+        Value: true
+      RPLIDAR_B:
+        Value: true
+      RPLIDAR_custom:
         Value: true
       left_wheel_link:
         Value: true
@@ -172,7 +184,9 @@ Visualization Manager:
           caster_wheel_link: {}
         chassis_link: {}
         gnss_antenna_link: {}
-        laser: {}
+        RPLIDAR_F: {}
+        RPLIDAR_B: {}
+        RPLIDAR_custom: {}
         left_wheel_link: {}
         right_wheel_link: {}
         safety_footprint_link: {}

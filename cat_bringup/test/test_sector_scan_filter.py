@@ -35,6 +35,13 @@ class SectorFilterTest(unittest.TestCase):
         for i in [0, 1, 3, 4]:
             self.assertEqual(out[i], 0.2)
 
+    def test_upside_down_right_facing_mount(self):
+        # RPLIDAR_B: roll 180 deg reverses each scan bearing before yaw -90 deg.
+        out = filter_ranges([0.2, 0.2], -math.pi / 2, math.pi,
+                            -math.pi / 2, math.radians(200), 0.1, 0.4, -1.0)
+        self.assertEqual(out[0], 0.2)  # sensor -90 deg points vehicle front
+        self.assertTrue(math.isnan(out[1]))  # sensor +90 deg points vehicle rear
+
 
 if __name__ == '__main__':
     unittest.main()

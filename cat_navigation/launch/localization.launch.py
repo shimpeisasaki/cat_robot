@@ -1,4 +1,4 @@
-"""Saved-map localization only; requires scan and odom/base/laser TF externally."""
+"""Saved-map localization only; requires scan and odom/base/RPLIDAR TF externally."""
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
