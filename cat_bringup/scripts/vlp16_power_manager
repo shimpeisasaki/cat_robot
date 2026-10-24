@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Start the VLP-16 motor for ROS use and stop it on graceful ROS shutdown."""
+import json
+import signal
+import time
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+import rclpy
+from rclpy.node import Node
+
+
+class Vlp16PowerManager(Node):
+    def __init__(self):
+        super().__init__('vlp16_power_manager')
+        self.device_ip = self.declare_parameter('device_ip', '192.168.0.201').value
+        self.startup_rpm = int(self.declare_parameter('startup_rpm', 600).value)
+        self.request_timeout = float(self.declare_parameter('request_timeout', 1.5).value)
+        self.status_timeout = float(self.declare_parameter('status_timeout', 8.0).value)
+        if (not 300 <= self.startup_rpm <= 1200 or self.startup_rpm % 60 != 0 or
+                self.request_timeout <= 0 or self.status_timeout <= 0):
+            raise ValueError('Invalid VLP-16 power manager parameters')
+        self.base_url = f'http://{self.device_ip}'
+        self.stopped = False
+
+    def start_sensor(self):
+        self._set_rpm(self.startup_rpm)
+        try:
+            status = self._wait_for_running_state()
+        except Exception:
+            self._set_rpm(0)
+            raise
+        print(f"[vlp16_power_manager] VLP-16 started at {status['motor']['rpm']} RPM; "
+              'it will be stopped when this ROS process exits', flush=True)
+
+    def _request(self, path, data=None):
+        payload = None if data is None else urlencode(data).encode('ascii')
+        request = Request(f'{self.base_url}{path}', data=payload)
+        with urlopen(request, timeout=self.request_timeout) as response:
+            return response.read()
+
+    def _set_rpm(self, rpm):
+        self._request('/cgi/setting', {'rpm': str(rpm)})
+
+    def _status(self):
+        return json.loads(self._request('/cgi/status.json').decode('utf-8-sig'))
+
+    def _wait_for_running_state(self):
+        deadline = time.monotonic() + self.status_timeout
+        last_error = 'no status received'
+        while time.monotonic() < deadline:
+            try:
+                status = self._status()
+                motor = status['motor']
+                laser = status['laser']['state'].lower()
+                if int(motor['rpm']) == self.startup_rpm and laser == 'on':
+                    return status
+                last_error = f"motor={motor.get('state')}/{motor.get('rpm')} RPM, laser={laser}"
+            except (URLError, TimeoutError, ValueError, KeyError, TypeError) as exc:
+                last_error = str(exc)
+            time.sleep(0.25)
+        raise TimeoutError(f'VLP-16 did not reach requested state: {last_error}')
+
+    def stop_sensor(self):
+        if self.stopped:
+            return
+        self.stopped = True
+        try:
+            self._set_rpm(0)
+            print('[vlp16_power_manager] VLP-16 stop command sent (RPM 0)', flush=True)
+        except Exception as exc:
+            print(f'[vlp16_power_manager] Failed to send VLP-16 stop command: {exc}',
+                  flush=True)
+
+
+def main():
+    rclpy.init()
+    node = None
+    try:
+        node = Vlp16PowerManager()
+        node.start_sensor()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    except Exception as exc:
+        if node is None:
+            print(f'VLP-16 startup failed: {exc}', flush=True)
+        else:
+            node.get_logger().error(f'VLP-16 power manager failed: {exc}')
+        raise
+    finally:
+        if node is not None:
+            # Prevent a second launch signal interrupting the HTTP stop request.
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            node.stop_sensor()
+            node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

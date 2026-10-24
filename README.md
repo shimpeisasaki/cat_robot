@@ -76,6 +76,8 @@ ROS 2 HumbleのVelodyne上流パッケージは `src/velodyne` に独立して�
 
 `base_link` からVLP-16計測原点へのTFは前方0.0186 m、中央、高さ0.207 m、前傾7°である。RPLIDARの旧位置 `RPLIDAR_F` は x=0.03319 m、z=0.24883 m、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=+90°である。yawはRVizで確認した前後の向きに合わせて180°補正した。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `back`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
 
+VLP-16のROS起動時は `vlp16_power_manager` がセンサAPIでRPM 600を設定し、起動完了を確認する。bringupを通常終了するとRPM 0を送信し、センサが回転を止めてレーザーを無効にする。RPM 0への減速には数秒かかる。PCの電源断や強制killでは停止APIを実行できないため、停止状態を保証するには電源を切る。
+
 RPLIDARは全周でLiDAR原点から0.2 m未満を `/scan` で無効化する。VLP-16は点群変換時の下限を0.1 mとし、車体前方側270°は0.1 m未満、後方側90°は0.6 m未満を `/velodyne_points` で無効化する。VLP-16のセクタは `vlp16.yaml` の取付角を用いて車体方向で判定する。これはソフトウェアのマスク値であり、センサの近距離測定能力を保証する値ではない。
 
 現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。

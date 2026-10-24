@@ -27,3 +27,10 @@ vlp16_sector_filter:
     front_angle_deg: 270.0
     front_min_range: 0.1
     rear_min_range: 0.6
+
+vlp16_power_manager:
+  ros__parameters:
+    device_ip: 192.168.0.201
+    startup_rpm: 600
+    request_timeout: 1.5
+    status_timeout: 8.0

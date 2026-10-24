@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mask VLP-16 near returns by vehicle bearing without changing cloud layout."""
 import math
+import signal
 
 import numpy as np
 import rclpy
@@ -109,6 +110,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         node.destroy_node()
         rclpy.try_shutdown()
 
