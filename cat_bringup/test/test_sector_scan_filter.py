@@ -3,12 +3,25 @@ import math
 from pathlib import Path
 import runpy
 import unittest
+import yaml
 
 filter_ranges = runpy.run_path(str(
     Path(__file__).resolve().parents[1] / 'scripts/sector_scan_filter'))['filter_ranges']
 
 
 class SectorFilterTest(unittest.TestCase):
+    def test_configured_rplidar_mask_is_uniform(self):
+        config = yaml.safe_load((Path(__file__).resolve().parents[1] /
+                                 'config/scan_filter.yaml').read_text())
+        params = config['sector_scan_filter']['ros__parameters']
+        self.assertEqual(params['front_min_range'], 0.2)
+        self.assertEqual(params['rear_min_range'], 0.2)
+        for bearing in (-math.pi, -math.pi / 2, 0, math.pi / 2, math.pi):
+            self.assertTrue(math.isnan(filter_ranges(
+                [0.19], bearing, 0, params['mounting_yaw'],
+                math.radians(params['front_angle_deg']), 0.2, 0.2,
+                -1.0)[0]))
+
     def filter(self, vehicle_degrees, distance):
         return filter_ranges([distance], math.radians(vehicle_degrees)-math.pi,
                              0.01, math.pi, math.radians(200), 0.1, 0.4)[0]

@@ -72,9 +72,11 @@ ROS 2 HumbleのVelodyne上流パッケージは `src/velodyne` に独立して�
 
 この機体のVLP-16はセンサIP `192.168.0.201/24`、送信先 `192.168.0.100`、データポート `2368`、回転数600 rpmである。PCのUSB LANアダプタに `192.168.0.100/24` を設定し、ゲートウェイは設定しない。このPCではインターフェース `enx6c1ff7cbb97f` のNetworkManager接続 `VLP16 USB Ethernet` に保存済みで、Wi-Fiがデフォルト経路を維持する。センサ側の値が異なる場合は `cat_bringup/config/vlp16.yaml` を合わせる。
 
-モータを起動せずに点群を確認するには `ros2 launch cat_bringup vlp16.launch.py show_rviz:=true` を使う。`/velodyne_packets` と `/velodyne_points` を配信し、RVizのFixed Frameは `vlp16` に設定される。通常の機体起動では `lidar_source:=rplidar`、`lidar_source:=vlp16`、`lidar_source:=both` を指定する。`both` でもRPLIDARの `/scan` とVLP-16の `/velodyne_points` は別トピックである。`use_lidar:=false` は両方を起動しない。
+モータを起動せずに点群を確認するには `ros2 launch cat_bringup vlp16.launch.py show_rviz:=true` を使う。`/velodyne_packets`、マスク前の `/velodyne_points_raw`、マスク後の `/velodyne_points` を配信し、RVizのFixed Frameは `vlp16` に設定される。通常の機体起動では `lidar_source:=rplidar`、`lidar_source:=vlp16`、`lidar_source:=both` を指定する。`both` でもRPLIDARの `/scan` とVLP-16の `/velodyne_points` は別トピックである。`use_lidar:=false` は両方を起動しない。
 
 `base_link` からVLP-16計測原点へのTFは前方0.0186 m、中央、高さ0.207 m、前傾7°である。RPLIDARの旧位置 `RPLIDAR_F` は x=0.03319 m、z=0.24883 m、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=+90°である。yawはRVizで確認した前後の向きに合わせて180°補正した。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `back`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
+
+RPLIDARは全周でLiDAR原点から0.2 m未満を `/scan` で無効化する。VLP-16は点群変換時の下限を0.1 mとし、車体前方側270°は0.1 m未満、後方側90°は0.6 m未満を `/velodyne_points` で無効化する。VLP-16のセクタは `vlp16.yaml` の取付角を用いて車体方向で判定する。これはソフトウェアのマスク値であり、センサの近距離測定能力を保証する値ではない。
 
 現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。
 
@@ -100,12 +102,13 @@ ros2 service call /base_safety/free std_srvs/srv/Trigger '{}'
 | `/wheel_odom` | 車輪・IMU EKFによる推定値 |
 | `/odom` | 選択した推定値。`odom → base_link` のTFも配信 |
 | `/scan`、`/scan_raw` | フィルタ後のLiDAR、フィルタ前のLiDAR |
+| `/velodyne_points`、`/velodyne_points_raw` | 近距離マスク後・マスク前のVLP-16点群 |
 | `/zed/zed_node/rgb/color/raw/image` | ZEDの未補正RGB画像。内部取得は30 fps、配信目標上限は24 Hz。実際の受信周期は処理負荷で変動する。深度画像・点群の配信は無効 |
 | `/base/state`、`/diagnostics` | モーター状態、電流・温度・異常の診断 |
 | `/cmd_vel_external`、`/cmd_vel_teleop`、`/cmd_vel_panorama` | 外部走行指令、平滑化済み手動指令、撮影旋回指令 |
 | `/cmd_vel_safe`、`/base_safety/mode` | 安全制御後の指令、ドライバへの動作許可 |
 
-機体寸法、モーターID、方向、シリアル設定は `cat_bringup/config/robot.yaml` に集約する。手動操作は `manual_control.yaml`、LiDARの近距離除外は `scan_filter.yaml`、車輪・IMU推定は `ekf.yaml` で設定する。ZEDの設定は `zed_vio.yaml` と `zed_sensors.yaml` を使い分ける。通常運転では生RPMトピックを公開しない。
+機体寸法、モーターID、方向、シリアル設定は `cat_bringup/config/robot.yaml` に集約する。手動操作は `manual_control.yaml`、RPLIDARの近距離除外は `scan_filter.yaml`、VLP-16の近距離除外は `vlp16.yaml`、車輪・IMU推定は `ekf.yaml` で設定する。ZEDの設定は `zed_vio.yaml` と `zed_sensors.yaml` を使い分ける。通常運転では生RPMトピックを公開しない。
 
 ## モーター保守
 

@@ -20,7 +20,11 @@ def generate_launch_description():
              name='velodyne_driver_node', output='screen', parameters=[config]),
         Node(package='velodyne_pointcloud', executable='velodyne_transform_node',
              name='velodyne_transform_node', output='screen',
-             parameters=[config, {'calibration': calibration}]),
+             parameters=[config, {'calibration': calibration}],
+             remappings=[('velodyne_points', 'velodyne_points_raw')]),
+        Node(package='cat_bringup', executable='vlp16_sector_filter',
+             name='vlp16_sector_filter', output='screen', parameters=[config],
+             additional_env={'PYTHONNOUSERSITE': '1'}),
         Node(package='rviz2', executable='rviz2', name='vlp16_rviz', output='screen',
              arguments=['-d', PathJoinSubstitution([
                  FindPackageShare('cat_bringup'), 'rviz', 'vlp16.rviz'])],
