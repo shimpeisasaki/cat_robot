@@ -85,7 +85,8 @@ public:
     channels_.push_back(
       {"left", left_motor_id, std::make_unique<MotorControl>(left_device), freewheel_on_shutdown});
     channels_.push_back(
-      {"right", right_motor_id, std::make_unique<MotorControl>(right_device), freewheel_on_shutdown});
+      {"right", right_motor_id, std::make_unique<MotorControl>(right_device),
+        freewheel_on_shutdown});
     for (auto & channel : channels_) {
       channel.driver->set_reply_timeout(reply_timeout);
     }
@@ -180,7 +181,8 @@ public:
         std::placeholders::_2));
     if (tools_enabled_) {
       rpm_publisher_ = create_publisher<std_msgs::msg::Int16MultiArray>("/ddsm115/rpm_fb", qos);
-      current_publisher_ = create_publisher<std_msgs::msg::Float32MultiArray>("/ddsm115/cur_fb", qos);
+      current_publisher_ =
+        create_publisher<std_msgs::msg::Float32MultiArray>("/ddsm115/cur_fb", qos);
       temperature_publisher_ =
         create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/temp_fb", qos);
       error_publisher_ = create_publisher<std_msgs::msg::Int8MultiArray>("/ddsm115/error", qos);
@@ -188,7 +190,9 @@ public:
         create_publisher<std_msgs::msg::UInt8MultiArray>("/ddsm115/online_id", qos);
     }
     state_publisher_ = create_publisher<std_msgs::msg::UInt8>("/base/state", rclcpp::QoS(1));
-    diagnostics_publisher_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 1);
+    diagnostics_publisher_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
+      "/diagnostics",
+      1);
     timer_ = create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(motor_update_period_),
       std::bind(&BaseDriver::update, this));
@@ -301,12 +305,12 @@ private:
     const auto update_start = std::chrono::steady_clock::now();
     if (safety_required_) {
       const auto mode = safety_lease_->mode(update_start);
+      const bool change_freewheel = (mode == 1 && !freewheel_enabled_) ||
+        (mode == 2 && (freewheel_enabled_ || brake_enabled_));
       safety_applying_ = true;
       if (mode == 0 && (!brake_enabled_ || freewheel_enabled_)) {
         set_brake_enabled(true);
-      } else if ((mode == 1 && !freewheel_enabled_) ||
-        (mode == 2 && (freewheel_enabled_ || brake_enabled_)))
-      {
+      } else if (change_freewheel) {
         auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
         auto response = std::make_shared<std_srvs::srv::SetBool::Response>();
         request->data = mode == 1;
@@ -363,18 +367,21 @@ private:
       rclcpp::shutdown();
       return;
     }
-    const bool healthy = std::all_of(channels_.begin(), channels_.end(), [this](const auto & c) {
-      return rpm_feedback_valid_[c.motor_id - 1] && errors_[c.motor_id - 1] == 0;
-    });
-    const bool stopped = healthy && std::all_of(channels_.begin(), channels_.end(), [this](const auto & c) {
-      return std::abs(rpm_feedback_[c.motor_id - 1]) <= 1;
-    });
+    const bool healthy = std::all_of(
+      channels_.begin(), channels_.end(), [this](const auto & c) {
+        return rpm_feedback_valid_[c.motor_id - 1] && errors_[c.motor_id - 1] == 0;
+      });
+    const bool stopped = healthy && std::all_of(
+      channels_.begin(), channels_.end(), [this](const auto & c) {
+        return std::abs(rpm_feedback_[c.motor_id - 1]) <= 1;
+      });
     if (!healthy) {
       motion_rearm_required_ = true;
       std::fill(rpm_commands_.begin(), rpm_commands_.end(), std::int16_t{0});
       set_brake_enabled(true);
     }
-    wheel_->update(rpm_feedback_[channels_[0].motor_id - 1],
+    wheel_->update(
+      rpm_feedback_[channels_[0].motor_id - 1],
       rpm_feedback_[channels_[1].motor_id - 1], healthy, update_start);
     std_msgs::msg::UInt8 state;
     state.data = healthy ? (stopped ? 3 : 1) : 0;  // bit 0: healthy, bit 1: stopped
@@ -390,9 +397,9 @@ private:
         status.level = rpm_feedback_valid_[i] && errors_[i] == 0 ? 0 : 2;
         status.message = status.level == 0 ? "OK" : "Motor communication or controller fault";
         for (const auto & entry : std::vector<std::pair<std::string, std::string>>{
-          {"current", std::to_string(current_feedback_[i])},
-          {"temperature", std::to_string(temperature_feedback_[i])},
-          {"error", std::to_string(errors_[i])}})
+            {"current", std::to_string(current_feedback_[i])},
+            {"temperature", std::to_string(temperature_feedback_[i])},
+            {"error", std::to_string(errors_[i])}})
         {
           diagnostic_msgs::msg::KeyValue value;
           value.key = entry.first; value.value = entry.second;

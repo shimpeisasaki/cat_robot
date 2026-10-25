@@ -11,7 +11,8 @@ class SafetyLease
 {
 public:
   using Clock = std::chrono::steady_clock;
-  explicit SafetyLease(double timeout) : timeout_(timeout) {}
+  explicit SafetyLease(double timeout)
+  : timeout_(timeout) {}
   void trip() {mode_ = 0; acknowledged_ = false;}
   void receive(std::uint8_t mode, Clock::time_point now)
   {
@@ -34,4 +35,4 @@ private:
   std::chrono::duration<double> timeout_;
 };
 }  // namespace ddsm115_controller
-#endif
+#endif  // DDSM115_CONTROLLER__SAFETY_LEASE_HPP_

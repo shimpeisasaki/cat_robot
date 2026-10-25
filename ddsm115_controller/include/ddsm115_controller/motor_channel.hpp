@@ -4,7 +4,8 @@
 #include <string>
 #include <utility>
 #include "ddsm115_controller/motor_control.hpp"
-namespace ddsm115_controller {
+namespace ddsm115_controller
+{
 struct MotorChannel
 {
   MotorChannel(
@@ -48,7 +49,8 @@ struct MotorChannel
         std::fprintf(stderr, "Shutdown brake %s ID %d: %s\n", name.c_str(), motor_id, error.what());
       }
     }
-    std::fprintf(stderr, "Shutdown brake %s ID %d: stop NOT confirmed; check physical stop\n",
+    std::fprintf(
+      stderr, "Shutdown brake %s ID %d: stop NOT confirmed; check physical stop\n",
       name.c_str(), motor_id);
   }
   std::string name;
@@ -57,4 +59,4 @@ struct MotorChannel
   bool freewheel_on_shutdown;
 };
 
-}
+}  // namespace ddsm115_controller

@@ -40,7 +40,7 @@ def open_port(path):
         raise RuntimeError('fuser not installed; cannot check for another serial owner')
     owner = subprocess.run(['fuser', path], capture_output=True, timeout=2)
     if owner.returncode != 1 or owner.stderr:
-        raise RuntimeError('Port busy or ownership check failed; close the driver first: '+
+        raise RuntimeError('Port busy or ownership check failed; close the driver first: ' +
                            (owner.stdout+owner.stderr).decode(errors='replace'))
     fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     try:
@@ -116,7 +116,9 @@ def main():
             print(f'{name}: final feedback (RPM, error) = {reply}', flush=True)
             if reply is None or reply[0] != 0 or reply[1] != 0:
                 failures = True
-        print('VISUALLY CHECK BOTH WHEELS. If not stopped, use the physical emergency stop.', flush=True)
+        print(
+            'VISUALLY CHECK BOTH WHEELS. If not stopped, use the physical emergency stop.',
+            flush=True)
         return 1 if failures else 0
     finally:
         for _, fd, _ in ports:

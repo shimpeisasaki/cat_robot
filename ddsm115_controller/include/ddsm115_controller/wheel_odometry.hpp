@@ -4,6 +4,8 @@
 #include <cmath>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <utility>
 #include "ddsm115_controller/differential_drive.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -15,7 +17,8 @@ namespace ddsm115_controller
 class WheelOdometry
 {
 public:
-  explicit WheelOdometry(rclcpp::Node & node) : node_(node)
+  explicit WheelOdometry(rclcpp::Node & node)
+  : node_(node)
   {
     base_ = node.declare_parameter("wheel_base", 0.208);
     radius_ = node.declare_parameter("R_wheel", 0.05065);
@@ -44,7 +47,7 @@ public:
   std::optional<std::pair<int16_t, int16_t>> command(const geometry_msgs::msg::Twist & msg) const
   {
     for (double v : {msg.linear.x, msg.linear.y, msg.linear.z,
-      msg.angular.x, msg.angular.y, msg.angular.z})
+        msg.angular.x, msg.angular.y, msg.angular.z})
     {
       if (!std::isfinite(v)) {return std::nullopt;}
     }
