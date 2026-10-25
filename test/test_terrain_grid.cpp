@@ -1,5 +1,7 @@
 #include <cmath>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 
 #include "cat_terrain/terrain_grid.hpp"
@@ -231,4 +233,24 @@ TEST(TerrainGrid, KeepsDiagonalGroundAcrossTheFullForwardSector)
   confirmed(grid, points);
   const auto moved = grid.update({}, {2.5, 4.0, 0.0, 0.0}, 0.6);
   EXPECT_GT(moved.observed_cells, 0);
+}
+
+TEST(TerrainGrid, RejectsInvalidDimensionsBeforeConvertingToIndices)
+{
+  for (double value : {0.0, -0.1, std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::infinity(), 1.0e-300})
+  {
+    cat_terrain::Config config;
+    config.resolution = value;
+    EXPECT_THROW(TerrainGrid{config}, std::invalid_argument);
+    config = {};
+    config.angular_resolution_deg = value;
+    EXPECT_THROW(TerrainGrid{config}, std::invalid_argument);
+    config = {};
+    config.radial_resolution = value;
+    EXPECT_THROW(TerrainGrid{config}, std::invalid_argument);
+  }
+  cat_terrain::Config config;
+  config.resolution = 1.0e-6;  // Individual dimensions fit, but their product does not.
+  EXPECT_THROW(TerrainGrid{config}, std::invalid_argument);
 }

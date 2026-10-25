@@ -234,16 +234,9 @@ private:
 
     const auto result = grid_->update(
       world_points, pose, rclcpp::Time(cloud->header.stamp).seconds());
-    const rclcpp::Time stamp(cloud->header.stamp);
-    hazards_publisher_->publish(makeGrid(result.hazards, stamp));
-    up_publisher_->publish(makeGrid(result.up_steps, stamp));
-    drop_publisher_->publish(makeGrid(result.drop_offs, stamp));
-    up_cells_publisher_->publish(makeCells(result.up_steps, stamp));
-    drop_cells_publisher_->publish(makeCells(result.drop_offs, stamp));
-    publishCoverage(result.hazards);
-    std_msgs::msg::Bool valid;
-    valid.data = !world_points.empty() && result.observed_cells > 0;
-    valid_publisher_->publish(valid);
+    publishResult(
+      result.hazards, result.up_steps, result.drop_offs, cloud->header.stamp,
+      !world_points.empty() && result.observed_cells > 0);
     last_good_cloud_time_ = std::chrono::steady_clock::now();
     have_good_cloud_ = true;
     stale_reported_ = false;
@@ -270,15 +263,23 @@ private:
     }
     const auto count = static_cast<std::size_t>(grid_->width() * grid_->height());
     const std::vector<int8_t> unknown(count, -1);
-    const auto stamp = now();
-    hazards_publisher_->publish(makeGrid(unknown, stamp));
-    up_publisher_->publish(makeGrid(unknown, stamp));
-    drop_publisher_->publish(makeGrid(unknown, stamp));
-    up_cells_publisher_->publish(makeCells(unknown, stamp));
-    drop_cells_publisher_->publish(makeCells(unknown, stamp));
-    publishCoverage(unknown);
+    publishResult(unknown, unknown, unknown, now(), false);
+  }
+
+  void publishResult(
+    const std::vector<int8_t> & hazards,
+    const std::vector<int8_t> & up_steps,
+    const std::vector<int8_t> & drop_offs,
+    const rclcpp::Time & stamp, bool is_valid)
+  {
+    hazards_publisher_->publish(makeGrid(hazards, stamp));
+    up_publisher_->publish(makeGrid(up_steps, stamp));
+    drop_publisher_->publish(makeGrid(drop_offs, stamp));
+    up_cells_publisher_->publish(makeCells(up_steps, stamp));
+    drop_cells_publisher_->publish(makeCells(drop_offs, stamp));
+    publishCoverage(hazards);
     std_msgs::msg::Bool valid;
-    valid.data = false;
+    valid.data = is_valid;
     valid_publisher_->publish(valid);
   }
 
