@@ -26,15 +26,19 @@ struct Config
 {
   double min_x{0.35};
   double max_x{5.5};
+  double detection_max_x{3.0};
   double half_width{1.0};
   double resolution{0.1};
+  double sensor_x{-0.347981};
+  double angular_resolution_deg{2.0};
+  double radial_resolution{0.05};
+  double max_pair_distance{1.0};
   double step_height{0.03};
-  double max_slope_deg{15.0};
-  double history_seconds{1.2};
-  int history_frames{6};
+  double min_residual_slope_deg{5.0};
+  double history_seconds{2.0};
+  int history_frames{24};
   int min_confirmations{3};
   double max_height_mad{0.035};
-  int max_gap_cells{2};
   int min_lateral_support{2};
 };
 
@@ -59,21 +63,16 @@ public:
   int height() const {return height_;}
 
 private:
-  struct CellSample
-  {
-    double x;
-    double y;
-    double z;
-  };
   struct Frame
   {
     double stamp;
-    std::vector<CellSample> cells;
+    std::vector<Point> points;
   };
 
   Config config_;
   int width_;
   int height_;
+  int ray_count_;
   std::deque<Frame> history_;
 };
 

@@ -6,17 +6,21 @@ terrain_step_detector:
     fixed_frame: odom
     min_x: 0.35
     max_x: 5.5
+    detection_max_x: 3.0
     half_width: 1.0
     resolution: 0.1
+    sensor_x: -0.347981
+    angular_resolution_deg: 2.0
+    radial_resolution: 0.05
+    max_pair_distance: 1.0
     ground_min_z: -0.5
     ground_max_z: 0.35
     step_height: 0.03
-    max_slope_deg: 15.0
-    history_seconds: 1.2
-    history_frames: 6
+    min_residual_slope_deg: 5.0
+    history_seconds: 2.0
+    history_frames: 24
     min_confirmations: 3
     max_height_mad: 0.035
-    max_gap_cells: 2
     min_lateral_support: 2
     tf_timeout_seconds: 0.05
     input_timeout_seconds: 0.6
