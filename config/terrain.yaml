@@ -1,0 +1,22 @@
+terrain_step_detector:
+  ros__parameters:
+    cloud_topic: /velodyne_points
+    hazards_topic: /terrain/hazards
+    base_frame: base_link
+    fixed_frame: odom
+    min_x: 0.6
+    max_x: 5.0
+    half_width: 1.0
+    resolution: 0.1
+    ground_min_z: -0.5
+    ground_max_z: 0.35
+    step_height: 0.06
+    max_slope_deg: 15.0
+    history_seconds: 1.2
+    history_frames: 6
+    min_confirmations: 3
+    max_height_mad: 0.035
+    max_gap_cells: 2
+    min_lateral_support: 2
+    tf_timeout_seconds: 0.05
+    input_timeout_seconds: 0.6
