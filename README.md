@@ -7,7 +7,7 @@ It is informed by the grid-and-height-difference approach in
 keeps its own time-aligned terrain observations and step logic.
 
 The node subscribes to `/velodyne_points`. The default region is `base_link`
-`x=0.5..5.0 m`, `y=-1.0..1.0 m`. Only points with `z=-0.5..0.35 m` in
+`x=0.35..5.5 m`, `y=-1.0..1.0 m`. Only points with `z=-0.5..0.35 m` in
 `base_link` enter the model. It transforms those points into `odom` at the cloud
 timestamp, keeps up to six scans or 1.2 seconds, and compares ground-height
 estimates in front-to-back neighboring 0.1 m cells. An edge needs a height
@@ -32,8 +32,9 @@ Nav2 or motor commands. If no usable cloud arrives for 0.6 seconds, a watchdog
 publishes an all-unknown grid and `valid=false`. Keep
 `/local_costmap/costmap_raw` owned by Nav2.
 
-With the default region, `/terrain/coverage_by_range` has five values for
-`x=[0.5,1.5), [1.5,2.5), [2.5,3.5), [3.5,4.5), [4.5,5.0)` m. This makes
+With the default region, `/terrain/coverage_by_range` has six values for
+`x=[0.35,1.35), [1.35,2.35), [2.35,3.35), [3.35,4.35), [4.35,5.35),
+[5.35,5.5)` m. This makes
 the VLP-16's actual ground coverage visible during offline bag evaluation.
 
 Build with `colcon build --symlink-install --packages-select cat_terrain` after
@@ -85,7 +86,7 @@ Record flat ground, slopes, vegetation, curbs, and stairs and compare labels
 before using this output to influence navigation. CPU time is logged when a
 cloud takes over 50 ms to process.
 
-The configured 5 m region is an evaluation boundary, not a claim that every
+The configured 5.5 m limit is an evaluation boundary, not a claim that every
 cell receives ground returns. On flat ground, the fixed 2-degree VLP-16 beams
 leave increasingly wide gaps with distance. The history uses `odom` to bring
 successive scans into the same place, while `/terrain/coverage_by_range` shows

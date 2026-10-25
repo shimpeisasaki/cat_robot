@@ -165,3 +165,23 @@ TEST(TerrainGrid, MountedVlp16HasSparseFarGroundOnFlatSurface)
   EXPECT_EQ(far_observed, 0);
   EXPECT_EQ(marked(result.hazards), 0);
 }
+
+TEST(TerrainGrid, IncludesNearAndFarGroundWithinConfiguredRange)
+{
+  TerrainGrid grid({});
+  const auto result = confirmed(grid, {{0.40, 0.0, 0.0}, {5.45, 0.0, 0.0}});
+  EXPECT_EQ(result.width, 52);
+  EXPECT_EQ(result.height, 20);
+  EXPECT_EQ(result.observed_cells, 2);
+  bool near_observed = false;
+  bool far_observed = false;
+  for (int iy = 0; iy < result.height; ++iy) {
+    for (int ix = 0; ix < result.width; ++ix) {
+      const auto value = result.hazards[static_cast<std::size_t>(iy * result.width + ix)];
+      near_observed |= ix <= 1 && value == 0;
+      far_observed |= ix >= 50 && value == 0;
+    }
+  }
+  EXPECT_TRUE(near_observed);
+  EXPECT_TRUE(far_observed);
+}
