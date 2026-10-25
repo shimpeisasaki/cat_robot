@@ -24,6 +24,7 @@ Outputs are `nav_msgs/msg/OccupancyGrid` in `base_link`:
 | `/terrain/drop_offs` | Confirmed falling steps |
 | `/terrain/valid` | `true` when recent clouds produced confirmed ground observations |
 | `/terrain/coverage_by_range` | Fraction of confirmed ground cells in successive 1 m bands, starting at `min_x` |
+| `/terrain/up_cells`, `/terrain/drop_cells` | Confirmed cells as `GridCells` for clear RViz overlay |
 
 Cells are `100` for a confirmed edge, `0` for observed ground, and `-1` for
 unknown. The outputs are for evaluation and RViz. They are **not** connected to
@@ -39,6 +40,23 @@ Build with `colcon build --symlink-install --packages-select cat_terrain` after
 sourcing ROS 2 Humble. When an existing source already publishes the point
 cloud and TF, run `ros2 launch cat_terrain terrain_step_detector.launch.py`.
 The launch starts only this detector. It does not start LiDAR, motors, or Nav2.
+Set `show_rviz:=true` to use the included point-cloud and hazard-grid display.
+For a stationary tabletop check without an `odom -> base_link` transform, set
+`fixed_frame:=base_link`; this disables meaningful motion registration until
+the normal odometry source is running.
+
+To inspect a stationary robot without starting its motors or camera, use two
+terminals after sourcing ROS 2 Humble and this workspace:
+
+```bash
+ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=false use_gnss:=false use_lidar:=true lidar_source:=vlp16 vlp16_mount:=back rviz:=false enable_joystick:=false enable_panorama:=false
+ros2 launch cat_terrain terrain_step_detector.launch.py fixed_frame:=base_link show_rviz:=true
+```
+
+RViz shows the VLP-16 cloud, yellow rising-step cells, and red falling-step
+cells. Toggle the `Terrain hazards` Map display to inspect observed and
+unknown cells. Shut down both launches normally to let the VLP-16 power
+manager stop the sensor.
 
 This is a first-pass detector. A VLP-16 has sparse vertical beams and typical
 range accuracy of about 3 cm. It cannot guarantee detection of every 6 cm step,
