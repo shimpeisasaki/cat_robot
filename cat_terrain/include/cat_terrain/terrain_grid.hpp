@@ -53,6 +53,7 @@ struct Result
   int hazard_cells{0};
 };
 
+// Radial profiles perform detection; the grid is only the output representation.
 class TerrainGrid
 {
 public:
@@ -73,6 +74,7 @@ private:
   int width_;
   int height_;
   int ray_count_;
+  int radial_bins_;
   std::deque<Frame> history_;
 };
 
