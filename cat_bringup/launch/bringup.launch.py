@@ -84,7 +84,7 @@ def generate_launch_description():
             launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items(),
             condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
-             parameters=[{'autorepeat_rate': 20.0, 'deadzone': 0.02}],
+             parameters=[{'autorepeat_rate': 20.0, 'deadzone': 0.05}],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='ddsm115_controller', executable='curvature_teleop',
              name='curvature_teleop', parameters=[manual_config], output='screen',
