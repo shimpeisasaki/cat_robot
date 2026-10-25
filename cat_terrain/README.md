@@ -19,6 +19,11 @@ that receive no laser return. The existing CAT URDF is displayed as a robot
 model. Its link names are prefixed with `sim_` to keep its TF separate from
 any real robot.
 
+Both detector launches load `config/terrain.yaml`. Its wildcard node selector
+allows the simulation node name `sim_terrain_step_detector` to use the same
+settings; pass this file only to the detector. The simulation launch overrides
+input/output topics and TF frames to keep them under the simulation names.
+
 Build and view the default flat floor with two boxes:
 
 ```bash

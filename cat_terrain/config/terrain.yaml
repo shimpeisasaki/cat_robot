@@ -1,4 +1,5 @@
-terrain_step_detector:
+# Passed only to the detector; also applies when its simulation node is renamed.
+/**:
   ros__parameters:
     cloud_topic: /velodyne_points
     hazards_topic: /terrain/hazards
