@@ -1,0 +1,25 @@
+# A broad floor section lowered by 6 cm. Edit the cutout and lower-floor
+# bounds together; otherwise the high floor will hide the lower one.
+sensor:
+  xyz_m: [-0.347981, 0.0, 0.515158]
+  rpy_deg: [160.0, 0.0, -90.0]
+  azimuth_samples: 900
+  rate_hz: 10.0
+  min_range_m: 0.1
+  max_range_m: 30.0
+robot:
+  pose_xyzyaw_deg: [0.0, 0.0, 0.0, 0.0]
+  motion:
+    - {duration_s: 2.0, linear_speed_mps: 0.0}
+    - {duration_s: 3.0, linear_speed_mps: 0.3}
+    - {duration_s: 2.0, linear_speed_mps: 0.0}
+surfaces:
+  - name: ground
+    bounds_xy_m: [-3.0, 8.0, -4.0, 4.0]
+    height_m: 0.0
+    holes:
+      - [1.7, 8.0, -1.0, 1.0]
+  - name: lower_floor
+    bounds_xy_m: [1.7, 8.0, -1.0, 1.0]
+    height_m: -0.06
+boxes: []
