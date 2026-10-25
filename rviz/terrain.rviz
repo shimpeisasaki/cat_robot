@@ -30,7 +30,7 @@ Visualization Manager:
       Depth: 5
       Durability Policy: Volatile
       History Policy: Keep Last
-      Reliability Policy: Best Effort
+      Reliability Policy: Reliable
       Value: /velodyne_points
     Use Fixed Frame: true
     Value: true
@@ -109,6 +109,10 @@ Visualization Manager:
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
