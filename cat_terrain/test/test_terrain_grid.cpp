@@ -143,7 +143,7 @@ TEST(TerrainGrid, RegistersHistoryInFixedFrameAndExpiresIt)
   const auto moving = grid.update(points, {0.1, 0.0, 0.0, 0.0}, 0.4);
   EXPECT_GT(marked(moving.drop_offs), 0);
 
-  const auto expired = grid.update({}, {0.1, 0.0, 0.0, 0.0}, 2.0);
+  const auto expired = grid.update({}, {0.1, 0.0, 0.0, 0.0}, 2.5);
   EXPECT_EQ(marked(expired.hazards), 0);
   EXPECT_EQ(expired.observed_cells, 0);
 }
@@ -166,22 +166,69 @@ TEST(TerrainGrid, MountedVlp16HasSparseFarGroundOnFlatSurface)
   EXPECT_EQ(marked(result.hazards), 0);
 }
 
-TEST(TerrainGrid, IncludesNearAndFarGroundWithinConfiguredRange)
+TEST(TerrainGrid, RecordsFarGroundAndEvaluatesItAfterMovingForward)
 {
   TerrainGrid grid({});
   const auto result = confirmed(grid, {{0.40, 0.0, 0.0}, {5.45, 0.0, 0.0}});
-  EXPECT_EQ(result.width, 52);
+  EXPECT_EQ(result.width, 27);
   EXPECT_EQ(result.height, 20);
-  EXPECT_EQ(result.observed_cells, 2);
+  EXPECT_EQ(result.observed_cells, 1);
   bool near_observed = false;
   bool far_observed = false;
   for (int iy = 0; iy < result.height; ++iy) {
     for (int ix = 0; ix < result.width; ++ix) {
       const auto value = result.hazards[static_cast<std::size_t>(iy * result.width + ix)];
       near_observed |= ix <= 1 && value == 0;
-      far_observed |= ix >= 50 && value == 0;
+      far_observed |= ix >= 25 && value == 0;
     }
   }
   EXPECT_TRUE(near_observed);
+  EXPECT_FALSE(far_observed);
+
+  const auto moved = grid.update({}, {2.5, 0.0, 0.0, 0.0}, 0.6);
+  EXPECT_GT(moved.observed_cells, 0);
+  far_observed = false;
+  for (int iy = 0; iy < moved.height; ++iy) {
+    for (int ix = 25; ix < moved.width; ++ix) {
+      far_observed |= moved.hazards[static_cast<std::size_t>(iy * moved.width + ix)] == 0;
+    }
+  }
   EXPECT_TRUE(far_observed);
+}
+
+TEST(TerrainGrid, SameHeightDifferenceAcrossWideGapIsNotAStep)
+{
+  std::vector<Point> points;
+  for (int y = -3; y <= 3; ++y) {
+    points.push_back({1.0, 0.1 * y, 0.0});
+    points.push_back({1.5, 0.1 * y, -0.1});
+  }
+  TerrainGrid grid({});
+  const auto result = confirmed(grid, points);
+  EXPECT_GT(result.observed_cells, 0);
+  EXPECT_EQ(marked(result.hazards), 0);
+}
+
+TEST(TerrainGrid, DetectsSixCentimeterDropNearThreeMeters)
+{
+  std::vector<Point> points;
+  for (const double x : {1.88, 2.30, 2.905, 3.848}) {
+    for (const double angle_deg : {-6.0, -3.0, 0.0, 3.0, 6.0}) {
+      const double angle = angle_deg * 3.141592653589793 / 180.0;
+      points.push_back({x, (x + 0.347981) * std::tan(angle), x >= 2.905 ? -0.06 : 0.0});
+    }
+  }
+  TerrainGrid grid({});
+  const auto result = confirmed(grid, points);
+  EXPECT_GT(marked(result.drop_offs), 0);
+  EXPECT_EQ(marked(result.up_steps), 0);
+}
+
+TEST(TerrainGrid, KeepsDiagonalGroundAcrossTheFullForwardSector)
+{
+  TerrainGrid grid({});
+  const std::vector<Point> points{{5.0, 4.8, 0.0}};
+  confirmed(grid, points);
+  const auto moved = grid.update({}, {2.5, 4.0, 0.0, 0.0}, 0.6);
+  EXPECT_GT(moved.observed_cells, 0);
 }

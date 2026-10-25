@@ -41,15 +41,21 @@ public:
     Config config;
     config.min_x = declare_parameter("min_x", config.min_x);
     config.max_x = declare_parameter("max_x", config.max_x);
+    config.detection_max_x = declare_parameter("detection_max_x", config.detection_max_x);
     config.half_width = declare_parameter("half_width", config.half_width);
     config.resolution = declare_parameter("resolution", config.resolution);
+    config.sensor_x = declare_parameter("sensor_x", config.sensor_x);
+    config.angular_resolution_deg = declare_parameter(
+      "angular_resolution_deg", config.angular_resolution_deg);
+    config.radial_resolution = declare_parameter("radial_resolution", config.radial_resolution);
+    config.max_pair_distance = declare_parameter("max_pair_distance", config.max_pair_distance);
     config.step_height = declare_parameter("step_height", config.step_height);
-    config.max_slope_deg = declare_parameter("max_slope_deg", config.max_slope_deg);
+    config.min_residual_slope_deg = declare_parameter(
+      "min_residual_slope_deg", config.min_residual_slope_deg);
     config.history_seconds = declare_parameter("history_seconds", config.history_seconds);
     config.history_frames = declare_parameter("history_frames", config.history_frames);
     config.min_confirmations = declare_parameter("min_confirmations", config.min_confirmations);
     config.max_height_mad = declare_parameter("max_height_mad", config.max_height_mad);
-    config.max_gap_cells = declare_parameter("max_gap_cells", config.max_gap_cells);
     config.min_lateral_support =
       declare_parameter("min_lateral_support", config.min_lateral_support);
     ground_min_z_ = declare_parameter("ground_min_z", -0.5);
@@ -85,8 +91,8 @@ public:
     stale_timer_ = create_wall_timer(
       std::chrono::milliseconds(200), std::bind(&TerrainStepDetector::onWatchdog, this));
     RCLCPP_INFO(
-      get_logger(), "Terrain ROI x=[%.2f, %.2f] m, width=%.2f m, step=%.3f m; %s -> %s",
-      config_.min_x, config_.max_x, 2.0 * config_.half_width, config_.step_height,
+      get_logger(), "Terrain detection x=[%.2f, %.2f] m, recording to %.2f m, step=%.3f m; %s -> %s",
+      config_.min_x, config_.detection_max_x, config_.max_x, config_.step_height,
       cloud_topic_.c_str(), hazards_topic_.c_str());
   }
 
@@ -147,7 +153,7 @@ private:
 
   void publishCoverage(const std::vector<int8_t> & costs)
   {
-    const int bands = static_cast<int>(std::ceil(config_.max_x - config_.min_x));
+    const int bands = static_cast<int>(std::ceil(config_.detection_max_x - config_.min_x));
     std::vector<int> observed(static_cast<std::size_t>(bands), 0);
     std::vector<int> total(static_cast<std::size_t>(bands), 0);
     for (int ix = 0; ix < grid_->width(); ++ix) {
@@ -210,8 +216,9 @@ private:
           continue;
         }
         const auto body = base_from_cloud * tf2::Vector3(*x, *y, *z);
-        if (body.x() < config_.min_x || body.x() >= config_.max_x ||
-          std::abs(body.y()) >= config_.half_width ||
+        if (body.x() < 0.0 || body.x() >= config_.max_x ||
+          std::abs(std::atan2(body.y(), body.x() - config_.sensor_x)) >=
+          3.141592653589793 / 4.0 ||
           body.z() < ground_min_z_ || body.z() > ground_max_z_)
         {
           continue;

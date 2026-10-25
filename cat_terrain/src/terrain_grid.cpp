@@ -13,21 +13,50 @@ namespace cat_terrain
 {
 namespace
 {
-struct Key
+constexpr double kPi = 3.141592653589793;
+constexpr double kHalfSector = kPi / 4.0;
+
+struct Accumulator
 {
-  int x;
-  int y;
-  bool operator==(const Key & other) const {return x == other.x && y == other.y;}
+  double x{0.0};
+  double y{0.0};
+  double z{0.0};
+  double min_z{INFINITY};
+  double max_z{-INFINITY};
+  int count{0};
+
+  void add(const Point & point)
+  {
+    x += point.x;
+    y += point.y;
+    z += point.z;
+    min_z = std::min(min_z, point.z);
+    max_z = std::max(max_z, point.z);
+    ++count;
+  }
 };
 
-struct KeyHash
+struct RaySample
 {
-  std::size_t operator()(const Key & key) const
-  {
-    const auto x = static_cast<uint32_t>(key.x);
-    const auto y = static_cast<uint32_t>(key.y);
-    return static_cast<std::size_t>((static_cast<uint64_t>(x) << 32) | y);
-  }
+  double distance;
+  double height;
+  int frame;
+};
+
+struct ProfilePoint
+{
+  double distance;
+  double height;
+  double x;
+  double y;
+  bool virtual_ground{false};
+};
+
+struct Candidate
+{
+  double x;
+  double y;
+  int kind;
 };
 
 double median(std::vector<double> & values)
@@ -45,22 +74,33 @@ double median(std::vector<double> & values)
 
 TerrainGrid::TerrainGrid(const Config & config)
 : config_(config),
-  width_(static_cast<int>(std::ceil((config.max_x - config.min_x) / config.resolution))),
-  height_(static_cast<int>(std::ceil(2.0 * config.half_width / config.resolution)))
+  width_(static_cast<int>(std::ceil(
+      (config.detection_max_x - config.min_x) / config.resolution))),
+  height_(static_cast<int>(std::ceil(2.0 * config.half_width / config.resolution))),
+  ray_count_(static_cast<int>(std::ceil(90.0 / config.angular_resolution_deg)))
 {
   if (!std::isfinite(config.min_x) || !std::isfinite(config.max_x) ||
-    !std::isfinite(config.half_width) || !std::isfinite(config.resolution) ||
-    !std::isfinite(config.step_height) || !std::isfinite(config.max_slope_deg) ||
+    !std::isfinite(config.detection_max_x) || !std::isfinite(config.half_width) ||
+    !std::isfinite(config.resolution) || !std::isfinite(config.sensor_x) ||
+    !std::isfinite(config.angular_resolution_deg) ||
+    !std::isfinite(config.radial_resolution) ||
+    !std::isfinite(config.max_pair_distance) ||
+    !std::isfinite(config.step_height) ||
+    !std::isfinite(config.min_residual_slope_deg) ||
     !std::isfinite(config.history_seconds) || !std::isfinite(config.max_height_mad) ||
-    config.min_x < 0.0 || config.max_x <= config.min_x || config.half_width <= 0.0 ||
-    config.resolution <= 0.0 || config.step_height <= 0.0 ||
-    config.max_slope_deg < 0.0 || config.max_slope_deg >= 89.0 ||
-    config.history_seconds <= 0.0 || config.history_frames < 1 ||
-    config.min_confirmations < 1 || config.min_confirmations > config.history_frames ||
-    config.max_height_mad < 0.0 || config.max_gap_cells < 1 ||
-    config.min_lateral_support < 1 || width_ < 2 || height_ < 1)
+    config.min_x < 0.0 || config.detection_max_x <= config.min_x ||
+    config.max_x < config.detection_max_x || config.half_width <= 0.0 ||
+    config.resolution <= 0.0 || config.sensor_x >= 0.0 ||
+    config.angular_resolution_deg <= 0.0 || config.angular_resolution_deg > 10.0 ||
+    config.radial_resolution <= 0.0 || config.max_pair_distance <= 0.0 ||
+    config.step_height <= 0.0 || config.min_residual_slope_deg < 0.0 ||
+    config.min_residual_slope_deg >= 89.0 || config.history_seconds <= 0.0 ||
+    config.history_frames < 1 || config.min_confirmations < 1 ||
+    config.min_confirmations > config.history_frames ||
+    config.max_height_mad < 0.0 || config.min_lateral_support < 1 ||
+    width_ < 1 || height_ < 1 || ray_count_ < 1)
   {
-    throw std::invalid_argument("Invalid terrain grid configuration");
+    throw std::invalid_argument("Invalid terrain profile configuration");
   }
 }
 
@@ -74,28 +114,51 @@ Result TerrainGrid::update(
   }
 
   if (!history_.empty() && stamp < history_.back().stamp) {
-    history_.clear();  // A time jump must not reuse observations from the old timeline.
+    history_.clear();
   }
 
+  const double cosine = std::cos(robot.yaw);
+  const double sine = std::sin(robot.yaw);
+  const double sensor_world_x = robot.x + cosine * config_.sensor_x;
+  const double sensor_world_y = robot.y + sine * config_.sensor_x;
+  const double angle_step = 2.0 * kHalfSector / ray_count_;
+  const int radial_bins = static_cast<int>(std::ceil(
+      (config_.max_x - config_.sensor_x) /
+      (std::cos(kHalfSector) * config_.radial_resolution))) + 1;
+
+  // Compress each scan in sensor-centred polar coordinates before storing it.
   if (!world_points.empty() && (history_.empty() || stamp > history_.back().stamp)) {
-    std::unordered_map<Key, std::vector<double>, KeyHash> bins;
+    std::unordered_map<int, Accumulator> bins;
     bins.reserve(world_points.size() / 4 + 1);
     for (const auto & point : world_points) {
       if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) {
         continue;
       }
-      const Key key{
-        static_cast<int>(std::floor(point.x / config_.resolution)),
-        static_cast<int>(std::floor(point.y / config_.resolution))};
-      bins[key].push_back(point.z);
+      const double dx = point.x - sensor_world_x;
+      const double dy = point.y - sensor_world_y;
+      const double bx = cosine * dx + sine * dy;
+      const double by = -sine * dx + cosine * dy;
+      const double angle = std::atan2(by, bx);
+      const double distance = std::hypot(bx, by);
+      if (angle < -kHalfSector || angle >= kHalfSector ||
+        distance < -config_.sensor_x || bx + config_.sensor_x > config_.max_x)
+      {
+        continue;
+      }
+      const int ray = static_cast<int>((angle + kHalfSector) / angle_step);
+      const int radial = static_cast<int>(distance / config_.radial_resolution);
+      if (ray >= 0 && ray < ray_count_ && radial >= 0 && radial < radial_bins) {
+        bins[ray * radial_bins + radial].add(point);
+      }
     }
     Frame frame{stamp, {}};
-    frame.cells.reserve(bins.size());
-    for (auto & [key, heights] : bins) {
-      frame.cells.push_back(CellSample{
-        (static_cast<double>(key.x) + 0.5) * config_.resolution,
-        (static_cast<double>(key.y) + 0.5) * config_.resolution,
-        median(heights)});
+    frame.points.reserve(bins.size());
+    for (const auto & [key, bin] : bins) {
+      (void)key;
+      if (bin.max_z - bin.min_z > 2.0 * config_.max_height_mad) {
+        continue;
+      }
+      frame.points.push_back({bin.x / bin.count, bin.y / bin.count, bin.z / bin.count});
     }
     history_.push_back(std::move(frame));
   }
@@ -107,108 +170,167 @@ Result TerrainGrid::update(
     history_.pop_front();
   }
 
-  const auto count = static_cast<std::size_t>(width_ * height_);
   Result result;
   result.width = width_;
   result.height = height_;
-  result.hazards.assign(count, -1);
-  result.up_steps.assign(count, -1);
-  result.drop_offs.assign(count, -1);
-  std::vector<std::vector<double>> heights_by_cell(count);
-  const double cosine = std::cos(robot.yaw);
-  const double sine = std::sin(robot.yaw);
+  const auto cell_count = static_cast<std::size_t>(width_ * height_);
+  result.hazards.assign(cell_count, -1);
+  result.up_steps.assign(cell_count, -1);
+  result.drop_offs.assign(cell_count, -1);
 
-  for (const auto & frame : history_) {
-    // Count each scan at most once per cell, even if several world cells map to it.
-    std::vector<std::vector<double>> frame_heights(count);
-    for (const auto & sample : frame.cells) {
-      const double dx = sample.x - robot.x;
-      const double dy = sample.y - robot.y;
+  std::vector<std::vector<RaySample>> rays(static_cast<std::size_t>(ray_count_));
+  for (std::size_t frame = 0; frame < history_.size(); ++frame) {
+    for (const auto & point : history_[frame].points) {
+      const double dx = point.x - sensor_world_x;
+      const double dy = point.y - sensor_world_y;
       const double bx = cosine * dx + sine * dy;
       const double by = -sine * dx + cosine * dy;
-      if (bx < config_.min_x || bx >= config_.max_x ||
-        by < -config_.half_width || by >= config_.half_width)
+      const double angle = std::atan2(by, bx);
+      if (angle < -kHalfSector || angle >= kHalfSector) {
+        continue;
+      }
+      const double distance = std::hypot(bx, by);
+      const double x = config_.sensor_x + bx;
+      if (distance < -config_.sensor_x || x > config_.max_x) {
+        continue;
+      }
+      const int ray = static_cast<int>((angle + kHalfSector) / angle_step);
+      rays[static_cast<std::size_t>(ray)].push_back({distance, point.z, static_cast<int>(frame)});
+    }
+  }
+
+  const auto cellIndex = [this](double x, double y) -> int {
+      if (x < config_.min_x || x >= config_.detection_max_x ||
+        y < -config_.half_width || y >= config_.half_width)
+      {
+        return -1;
+      }
+      const int ix = static_cast<int>((x - config_.min_x) / config_.resolution);
+      const int iy = static_cast<int>((y + config_.half_width) / config_.resolution);
+      return iy * width_ + ix;
+    };
+
+  std::vector<std::vector<Candidate>> candidates(static_cast<std::size_t>(ray_count_));
+  const double min_break_grade = std::tan(config_.min_residual_slope_deg * kPi / 180.0);
+  for (int ray = 0; ray < ray_count_; ++ray) {
+    auto & samples = rays[static_cast<std::size_t>(ray)];
+    std::sort(samples.begin(), samples.end(), [](const auto & a, const auto & b) {
+      return a.distance < b.distance;
+    });
+    const double angle = -kHalfSector + (ray + 0.5) * angle_step;
+    std::vector<ProfilePoint> profile;
+    // The already traversed region from the LiDAR to base_link is the local
+    // zero-height reference. It is never reported as a measured free cell.
+    profile.push_back({-config_.sensor_x, robot.z, 0.0, 0.0, true});
+    for (std::size_t begin = 0; begin < samples.size();) {
+      std::size_t end = begin + 1;
+      while (end < samples.size() &&
+        samples[end].distance - samples[begin].distance <= config_.radial_resolution)
+      {
+        ++end;
+      }
+      std::vector<double> distances;
+      std::vector<double> heights;
+      std::vector<uint8_t> seen(history_.size(), 0);
+      int confirmations = 0;
+      distances.reserve(end - begin);
+      heights.reserve(end - begin);
+      for (std::size_t i = begin; i < end; ++i) {
+        distances.push_back(samples[i].distance);
+        heights.push_back(samples[i].height);
+        if (!seen[static_cast<std::size_t>(samples[i].frame)]) {
+          seen[static_cast<std::size_t>(samples[i].frame)] = 1;
+          ++confirmations;
+        }
+      }
+      if (confirmations >= config_.min_confirmations) {
+        const double height = median(heights);
+        for (auto & value : heights) {
+          value = std::abs(value - height);
+        }
+        if (median(heights) <= config_.max_height_mad) {
+          const double distance = median(distances);
+          const double x = config_.sensor_x + distance * std::cos(angle);
+          const double y = distance * std::sin(angle);
+          profile.push_back({distance, height, x, y, false});
+          const int cell = cellIndex(x, y);
+          if (cell >= 0 && result.hazards[static_cast<std::size_t>(cell)] < 0) {
+            result.hazards[static_cast<std::size_t>(cell)] = 0;
+            result.up_steps[static_cast<std::size_t>(cell)] = 0;
+            result.drop_offs[static_cast<std::size_t>(cell)] = 0;
+            ++result.observed_cells;
+          }
+        }
+      }
+      begin = end;
+    }
+
+    for (std::size_t i = 1; i < profile.size(); ++i) {
+      const auto & near = profile[i - 1];
+      const auto & far = profile[i];
+      const double gap = far.distance - near.distance;
+      if (gap < config_.radial_resolution || gap > config_.max_pair_distance) {
+        continue;
+      }
+
+      // A ramp has a similar grade on both sides; a step has one abrupt
+      // height change. Use neighbouring pairs to estimate the local grade.
+      double grade_sum = 0.0;
+      int grade_count = 0;
+      if (i >= 2) {
+        const auto & previous = profile[i - 2];
+        const double previous_gap = near.distance - previous.distance;
+        if (previous_gap >= config_.radial_resolution &&
+          previous_gap <= config_.max_pair_distance)
+        {
+          grade_sum += (near.height - previous.height) / previous_gap;
+          ++grade_count;
+        }
+      }
+      if (i + 1 < profile.size()) {
+        const auto & next = profile[i + 1];
+        const double next_gap = next.distance - far.distance;
+        if (next_gap >= config_.radial_resolution &&
+          next_gap <= config_.max_pair_distance)
+        {
+          grade_sum += (next.height - far.height) / next_gap;
+          ++grade_count;
+        }
+      }
+      if (grade_count == 0) {
+        continue;
+      }
+      const double change = far.height - near.height;
+      const double residual = change - gap * grade_sum / grade_count;
+      if (std::abs(residual) + 1.0e-5 < config_.step_height ||
+        std::abs(residual) / gap <= min_break_grade ||
+        std::abs(change) / gap <= min_break_grade || residual * change <= 0.0)
       {
         continue;
       }
-      const int ix = static_cast<int>((bx - config_.min_x) / config_.resolution);
-      const int iy = static_cast<int>((by + config_.half_width) / config_.resolution);
-      if (ix >= 0 && ix < width_ && iy >= 0 && iy < height_) {
-        frame_heights[static_cast<std::size_t>(iy * width_ + ix)].push_back(sample.z);
-      }
-    }
-    for (std::size_t i = 0; i < count; ++i) {
-      if (!frame_heights[i].empty()) {
-        heights_by_cell[i].push_back(median(frame_heights[i]));
+      const auto & edge = near.virtual_ground ? far : near;
+      if (cellIndex(edge.x, edge.y) >= 0) {
+        candidates[static_cast<std::size_t>(ray)].push_back({
+          edge.x, edge.y, residual > 0.0 ? 1 : -1});
       }
     }
   }
 
-  std::vector<double> ground(count, 0.0);
-  std::vector<uint8_t> observed(count, 0);
-  for (std::size_t i = 0; i < count; ++i) {
-    auto & heights = heights_by_cell[i];
-    if (static_cast<int>(heights.size()) < config_.min_confirmations) {
-      continue;
-    }
-    const double center = median(heights);
-    for (auto & height : heights) {
-      height = std::abs(height - center);
-    }
-    if (median(heights) > config_.max_height_mad) {
-      continue;
-    }
-    ground[i] = center;
-    observed[i] = 1;
-    result.hazards[i] = 0;
-    result.up_steps[i] = 0;
-    result.drop_offs[i] = 0;
-    ++result.observed_cells;
-  }
-
-  std::vector<int8_t> candidates(count, 0);
-  const double max_slope = std::tan(config_.max_slope_deg * 3.141592653589793 / 180.0);
-  for (int iy = 0; iy < height_; ++iy) {
-    for (int ix = 0; ix < width_ - 1; ++ix) {
-      const auto near = static_cast<std::size_t>(iy * width_ + ix);
-      if (!observed[near]) {
-        continue;
-      }
-      for (int gap = 1; gap <= config_.max_gap_cells && ix + gap < width_; ++gap) {
-        const auto far = static_cast<std::size_t>(iy * width_ + ix + gap);
-        if (!observed[far]) {
-          continue;
-        }
-        const double change = ground[far] - ground[near];
-        const double distance = gap * config_.resolution;
-        if (std::abs(change) + 1.0e-5 >= config_.step_height &&
-          std::abs(change) / distance > max_slope)
-        {
-          candidates[near] = change > 0.0 ? 1 : -1;
-        }
-        break;  // The nearest visible patch is the only comparison for this cell.
-      }
-    }
-  }
-
-  for (int iy = 0; iy < height_; ++iy) {
-    for (int ix = 0; ix < width_; ++ix) {
-      const auto index = static_cast<std::size_t>(iy * width_ + ix);
-      const auto kind = candidates[index];
-      if (kind == 0) {
-        continue;
-      }
+  // Require a coherent edge across neighbouring rays, not just one noisy return.
+  for (int ray = 0; ray < ray_count_; ++ray) {
+    for (const auto & candidate : candidates[static_cast<std::size_t>(ray)]) {
       int support = 1;
-      for (int other_y = std::max(0, iy - 2);
-        other_y <= std::min(height_ - 1, iy + 2); ++other_y)
+      for (int neighbor = std::max(0, ray - 2);
+        neighbor <= std::min(ray_count_ - 1, ray + 2); ++neighbor)
       {
-        if (other_y == iy) {
+        if (neighbor == ray) {
           continue;
         }
-        for (int other_x = std::max(0, ix - 1);
-          other_x <= std::min(width_ - 1, ix + 1); ++other_x)
-        {
-          if (candidates[static_cast<std::size_t>(other_y * width_ + other_x)] == kind) {
+        for (const auto & other : candidates[static_cast<std::size_t>(neighbor)]) {
+          if (candidate.kind == other.kind &&
+            std::abs(candidate.x - other.x) <= 0.25 &&
+            std::abs(candidate.y - other.y) <= 0.25)
+          {
             ++support;
             break;
           }
@@ -217,9 +339,12 @@ Result TerrainGrid::update(
       if (support < config_.min_lateral_support) {
         continue;
       }
-      result.hazards[index] = 100;
-      (kind > 0 ? result.up_steps : result.drop_offs)[index] = 100;
-      ++result.hazard_cells;
+      const auto cell = static_cast<std::size_t>(cellIndex(candidate.x, candidate.y));
+      if (result.hazards[cell] != 100) {
+        ++result.hazard_cells;
+      }
+      result.hazards[cell] = 100;
+      (candidate.kind > 0 ? result.up_steps : result.drop_offs)[cell] = 100;
     }
   }
   return result;
