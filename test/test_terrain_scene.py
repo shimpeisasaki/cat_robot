@@ -1,15 +1,14 @@
 """Offline geometry checks for the synthetic VLP-16 scene generator."""
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-PACKAGE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PACKAGE / 'scripts'))
+from cat_terrain.scene import TerrainScene
 
-from terrain_scene import TerrainScene  # noqa: E402
+PACKAGE = Path(__file__).resolve().parents[1]
+
 
 
 def scene(name):
