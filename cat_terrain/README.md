@@ -58,6 +58,20 @@ cells. Toggle the `Terrain hazards` Map display to inspect observed and
 unknown cells. Shut down both launches normally to let the VLP-16 power
 manager stop the sensor.
 
+For a stationary check with the ZED color cloud as a visual reference, replace
+the first command with the following. The dedicated ZED config enables its
+registered `rgb` point cloud; the normal sensor config still leaves that
+stream off. The same terrain RViz display shows it alongside the VLP-16 points
+and step cells. Keep `use_base:=false` to leave motors unstarted.
+
+```bash
+ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=true odom_source:=wheel use_gnss:=false use_lidar:=true lidar_source:=vlp16 vlp16_mount:=back rviz:=false enable_joystick:=false enable_panorama:=false zed_config:=$HOME/ros2_ws/src/cat_robot/cat_bringup/config/zed_terrain_debug.yaml
+```
+
+The ZED cloud is only a visual debug layer; it is not an input to the terrain
+detector. Toggle `ZED colored points` in RViz when the additional processing
+or screen clutter is unwanted.
+
 This is a first-pass detector. A VLP-16 has sparse vertical beams and typical
 range accuracy of about 3 cm. It cannot guarantee detection of every 6 cm step,
 especially if the far surface is unobserved. The node currently applies one
