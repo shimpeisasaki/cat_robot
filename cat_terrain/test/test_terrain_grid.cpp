@@ -86,11 +86,15 @@ TEST(TerrainGrid, DetectsSupportedUpAndDownSteps)
   EXPECT_EQ(marked(down_result.up_steps), 0);
 }
 
-TEST(TerrainGrid, DetectsSixCentimeterEdgeButRejectsIsolatedPatch)
+TEST(TerrainGrid, DetectsThreeCentimeterEdgeButRejectsSmallerOrIsolatedPatch)
 {
   TerrainGrid edge({});
-  const auto six_centimeter = confirmed(edge, surface(-0.06));
-  EXPECT_GT(marked(six_centimeter.drop_offs), 0);
+  const auto three_centimeter = confirmed(edge, surface(-0.03));
+  EXPECT_GT(marked(three_centimeter.drop_offs), 0);
+
+  TerrainGrid shallow({});
+  const auto two_centimeter = confirmed(shallow, surface(-0.02));
+  EXPECT_EQ(marked(two_centimeter.hazards), 0);
 
   auto isolated = surface(0.0);
   for (auto & point : isolated) {

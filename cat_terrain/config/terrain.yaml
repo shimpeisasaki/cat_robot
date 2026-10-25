@@ -4,13 +4,13 @@ terrain_step_detector:
     hazards_topic: /terrain/hazards
     base_frame: base_link
     fixed_frame: odom
-    min_x: 0.6
+    min_x: 0.5
     max_x: 5.0
     half_width: 1.0
     resolution: 0.1
     ground_min_z: -0.5
     ground_max_z: 0.35
-    step_height: 0.06
+    step_height: 0.03
     max_slope_deg: 15.0
     history_seconds: 1.2
     history_frames: 6
