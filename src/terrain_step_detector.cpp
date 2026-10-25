@@ -11,6 +11,7 @@
 #include "cat_terrain/terrain_grid.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/grid_cells.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/msg/point_field.hpp"
@@ -76,6 +77,8 @@ public:
     valid_publisher_ = create_publisher<std_msgs::msg::Bool>("/terrain/valid", 1);
     coverage_publisher_ =
       create_publisher<std_msgs::msg::Float32MultiArray>("/terrain/coverage_by_range", 1);
+    up_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/up_cells", 1);
+    drop_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/drop_cells", 1);
     cloud_subscription_ = create_subscription<sensor_msgs::msg::PointCloud2>(
       cloud_topic_, rclcpp::SensorDataQoS(),
       std::bind(&TerrainStepDetector::onCloud, this, std::placeholders::_1));
@@ -116,6 +119,29 @@ private:
     message.info.origin.position.y = -config_.half_width;
     message.info.origin.orientation.w = 1.0;
     message.data = costs;
+    return message;
+  }
+
+  nav_msgs::msg::GridCells makeCells(
+    const std::vector<int8_t> & costs, const rclcpp::Time & stamp) const
+  {
+    nav_msgs::msg::GridCells message;
+    message.header.stamp = stamp;
+    message.header.frame_id = base_frame_;
+    message.cell_width = static_cast<float>(config_.resolution);
+    message.cell_height = static_cast<float>(config_.resolution);
+    for (int iy = 0; iy < grid_->height(); ++iy) {
+      for (int ix = 0; ix < grid_->width(); ++ix) {
+        if (costs[static_cast<std::size_t>(iy * grid_->width() + ix)] != 100) {
+          continue;
+        }
+        geometry_msgs::msg::Point point;
+        point.x = config_.min_x + (ix + 0.5) * config_.resolution;
+        point.y = -config_.half_width + (iy + 0.5) * config_.resolution;
+        point.z = 0.02;
+        message.cells.push_back(point);
+      }
+    }
     return message;
   }
 
@@ -205,6 +231,8 @@ private:
     hazards_publisher_->publish(makeGrid(result.hazards, stamp));
     up_publisher_->publish(makeGrid(result.up_steps, stamp));
     drop_publisher_->publish(makeGrid(result.drop_offs, stamp));
+    up_cells_publisher_->publish(makeCells(result.up_steps, stamp));
+    drop_cells_publisher_->publish(makeCells(result.drop_offs, stamp));
     publishCoverage(result.hazards);
     std_msgs::msg::Bool valid;
     valid.data = !world_points.empty() && result.observed_cells > 0;
@@ -239,6 +267,8 @@ private:
     hazards_publisher_->publish(makeGrid(unknown, stamp));
     up_publisher_->publish(makeGrid(unknown, stamp));
     drop_publisher_->publish(makeGrid(unknown, stamp));
+    up_cells_publisher_->publish(makeCells(unknown, stamp));
+    drop_cells_publisher_->publish(makeCells(unknown, stamp));
     publishCoverage(unknown);
     std_msgs::msg::Bool valid;
     valid.data = false;
@@ -262,6 +292,8 @@ private:
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr drop_publisher_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr valid_publisher_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr coverage_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::GridCells>::SharedPtr up_cells_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::GridCells>::SharedPtr drop_cells_publisher_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscription_;
   rclcpp::TimerBase::SharedPtr stale_timer_;
   std::chrono::steady_clock::time_point last_good_cloud_time_{};
