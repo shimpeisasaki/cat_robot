@@ -7,11 +7,11 @@ It is informed by the grid-and-height-difference approach in
 keeps its own time-aligned terrain observations and step logic.
 
 The node subscribes to `/velodyne_points`. The default region is `base_link`
-`x=0.6..5.0 m`, `y=-1.0..1.0 m`. Only points with `z=-0.5..0.35 m` in
+`x=0.5..5.0 m`, `y=-1.0..1.0 m`. Only points with `z=-0.5..0.35 m` in
 `base_link` enter the model. It transforms those points into `odom` at the cloud
 timestamp, keeps up to six scans or 1.2 seconds, and compares ground-height
 estimates in front-to-back neighboring 0.1 m cells. An edge needs a height
-difference of at least 0.06 m, a grade above 15 degrees, three separate scans,
+difference of at least 0.03 m, a grade above 15 degrees, three separate scans,
 and evidence in at least two nearby lateral cells. A lack of returns stays
 **unknown**; it does not by itself prove a drop or safe ground.
 
@@ -33,7 +33,7 @@ publishes an all-unknown grid and `valid=false`. Keep
 `/local_costmap/costmap_raw` owned by Nav2.
 
 With the default region, `/terrain/coverage_by_range` has five values for
-`x=[0.6,1.6), [1.6,2.6), [2.6,3.6), [3.6,4.6), [4.6,5.0)` m. This makes
+`x=[0.5,1.5), [1.5,2.5), [2.5,3.5), [3.5,4.5), [4.5,5.0)` m. This makes
 the VLP-16's actual ground coverage visible during offline bag evaluation.
 
 Build with `colcon build --symlink-install --packages-select cat_terrain` after
@@ -73,10 +73,14 @@ detector. Toggle `ZED colored points` in RViz when the additional processing
 or screen clutter is unwanted.
 
 This is a first-pass detector. A VLP-16 has sparse vertical beams and typical
-range accuracy of about 3 cm. It cannot guarantee detection of every 6 cm step,
-especially if the far surface is unobserved. The node currently applies one
-transform per complete cloud, so motion within a scan is not deskewed. The
-`base_link` height relative to gravity also needs verification on uneven ground.
+range accuracy of about 3 cm. The 3 cm threshold is experimental and may produce
+false positives or miss real steps, especially if the far surface is unobserved.
+The robot's current footprint is not measured as a ground reference: only
+observed cells in front of `base_link` are compared. A 3 cm difference across
+a 20 cm gap between observed cells also fails the separate 15-degree slope
+requirement. The node applies one transform per complete cloud, so motion
+within a scan is not deskewed. The `base_link` height relative to gravity also
+needs verification on uneven ground.
 Record flat ground, slopes, vegetation, curbs, and stairs and compare labels
 before using this output to influence navigation. CPU time is logged when a
 cloud takes over 50 ms to process.

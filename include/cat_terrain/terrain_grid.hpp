@@ -24,11 +24,11 @@ struct Pose
 
 struct Config
 {
-  double min_x{0.6};
+  double min_x{0.5};
   double max_x{5.0};
   double half_width{1.0};
   double resolution{0.1};
-  double step_height{0.06};
+  double step_height{0.03};
   double max_slope_deg{15.0};
   double history_seconds{1.2};
   int history_frames{6};
