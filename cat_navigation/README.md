@@ -25,7 +25,7 @@ ros2 launch cat_navigation navigation.launch.py
 
 既定は `use_zed:=false odom_source:=wheel` で、車輪オドメトリと2D LiDARを使う。ZEDのVIOを使う場合は `use_zed:=true odom_source:=vio` を指定する。撮影機能は既定で無効で、必要な場合は `enable_panorama:=true` を指定する。
 
-`lidar_source:=both` でRPLIDARの `/scan` を使いながらVLP-16の `/velodyne_points` も起動できる。地図作成・自己位置推定・安全監視は引き続きRPLIDARの `/scan` を使うため、`vlp16` 単独はこの起動では選択できない。VLP-16は既定で移設後の `VLP16_B`（後方347.981 mm、高さ515.158 mm、上下反転、前傾20°、yaw=-90°）を使い、旧位置 `VLP16_F` に戻すには `vlp16_mount:=front` を指定する。RPLIDARは既定で移設後の `RPLIDAR_B`（後方309.5 mm、高さ497.35 mm、逆さま、yaw=+90°）を使う。旧位置 `RPLIDAR_F` に戻すには `rplidar_mount:=front` を指定する。`legacy` も旧位置の別名として使える。`custom` は `rplidar_x/y/z/roll/yaw` を指定する。
+`lidar_source:=both` でRPLIDARの `/scan` を使いながらVLP-16の `/velodyne_points` も起動できる。地図作成・自己位置推定・安全監視は引き続きRPLIDARの `/scan` を使うため、`vlp16` 単独はこの起動では選択できない。VLP-16は既定で移設後の `VLP16_B`（後方347.981 mm、高さ515.158 mm、上下反転、前傾20°、yaw=-90°）を使い、旧位置 `VLP16_F` に戻すには `vlp16_mount:=front` を指定する。RPLIDARは既定で移設後の `RPLIDAR_B`（後方309.5 mm、高さ497.35 mm、逆さま、yaw=+90°）を使う。旧位置 `RPLIDAR_F`（前方3.19 mm、高さ254.35 mm）に戻すには `rplidar_mount:=front` を指定する。`legacy` も旧位置の別名として使える。`custom` は `rplidar_x/y/z/roll/yaw` を指定する。
 
 既定では `slam:=false` とし、以下のファイルをパッケージ内の `map/` から読み込む。
 

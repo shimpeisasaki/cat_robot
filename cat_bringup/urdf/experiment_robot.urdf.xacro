@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <robot name="experiment_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:arg name="use_zed" default="true"/>
-  <xacro:arg name="rplidar_x" default="0.03319"/>
+  <xacro:arg name="rplidar_x" default="0.00319"/>
   <xacro:arg name="rplidar_y" default="0"/>
-  <xacro:arg name="rplidar_z" default="0.24883"/>
+  <xacro:arg name="rplidar_z" default="0.25435"/>
   <xacro:arg name="rplidar_yaw" default="3.141592653589793"/>
   <xacro:arg name="rplidar_roll" default="0"/>
   <!-- Measurements are expressed from the drive-axle midpoint at ground level. -->
@@ -83,7 +83,7 @@
   <link name="RPLIDAR_F"/>
   <joint name="RPLIDAR_F_joint" type="fixed">
     <parent link="base_link"/><child link="RPLIDAR_F"/>
-    <origin xyz="0.03319 0 0.24883" rpy="0 0 ${pi}"/>
+    <origin xyz="0.00319 0 0.25435" rpy="0 0 ${pi}"/>
   </joint>
   <link name="RPLIDAR_B"/>
   <joint name="RPLIDAR_B_joint" type="fixed">

@@ -122,9 +122,9 @@ def generate_launch_description():
                               choices=['rplidar', 'both']),
         DeclareLaunchArgument('rplidar_mount', default_value='back',
                               choices=['front', 'back', 'custom', 'legacy']),
-        DeclareLaunchArgument('rplidar_x', default_value='0.03319'),
+        DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
-        DeclareLaunchArgument('rplidar_z', default_value='0.24883'),
+        DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
         DeclareLaunchArgument('rplidar_roll', default_value='0'),
         DeclareLaunchArgument('rplidar_yaw', default_value='3.141592653589793'),
         DeclareLaunchArgument('localization_params_file', default_value=PathJoinSubstitution([
