@@ -35,7 +35,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
-        DeclareLaunchArgument('rplidar_mount', default_value='back',
+        DeclareLaunchArgument('rplidar_mount', default_value='front',
                               choices=['front', 'back', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),

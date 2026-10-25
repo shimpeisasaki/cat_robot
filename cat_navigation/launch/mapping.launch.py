@@ -24,7 +24,7 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
                               choices=['rplidar', 'both']),
-        DeclareLaunchArgument('rplidar_mount', default_value='back',
+        DeclareLaunchArgument('rplidar_mount', default_value='front',
                               choices=['front', 'back', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),

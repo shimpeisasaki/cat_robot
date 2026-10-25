@@ -58,7 +58,7 @@ ros2 launch cat_bringup bringup.launch.py
 | `odom_source` | `vio` | `vio` または `wheel`。`wheel` は車輪・IMUの推定値を使用 |
 | `use_gnss` | `false` | GNSSの有効化 |
 | `serial_port` | `/dev/rplidar` | RPLIDARのシリアルポート |
-| `rplidar_mount` | `back` | 移設後 `RPLIDAR_B`。`front` は旧位置 `RPLIDAR_F`。`legacy` は `front` の別名。`custom` は `rplidar_x/y/z/roll/yaw`（m、rad） |
+| `rplidar_mount` | `front` | 現在位置 `RPLIDAR_F`。`back` は後方の `RPLIDAR_B`。`legacy` は `front` の別名。`custom` は `rplidar_x/y/z/roll/yaw`（m、rad） |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
 | `enable_joystick`, `rviz` | `true` | 操作入力と表示 |
 | `enable_panorama` | `true` | 24方向のRGB画像を保存する撮影アクション。画像合成は行わない |
@@ -74,7 +74,7 @@ ROS 2 HumbleのVelodyne上流パッケージは `src/velodyne` に独立して�
 
 モータを起動せずに点群を確認するには `ros2 launch cat_bringup vlp16.launch.py show_rviz:=true` を使う。`/velodyne_packets`、マスク前の `/velodyne_points_raw`、マスク後の `/velodyne_points` を配信する。通常の機体起動では `lidar_source:=rplidar`、`lidar_source:=vlp16`、`lidar_source:=both` を指定する。`both` でもRPLIDARの `/scan` とVLP-16の `/velodyne_points` は別トピックである。`use_lidar:=false` は両方を起動しない。VLP-16の取付位置は `vlp16_mount:=front|back` で選び、既定は `back`。単体起動の `vlp16.launch.py` でも `mount:=front|back` を指定できる。
 
-`VLP16_F` は旧位置で、前方18.6 mm、中央、高さ207 mm、前傾7°。`VLP16_B` は移設後の位置で、後方347.981 mm、中央、高さ515.158 mm、上下反転、レーザー上下軸が車体前方へ20°傾き、yaw=-90°である。点群のフレームと近距離セクタフィルタも選択位置に合わせる。`RPLIDAR_F` は前方3.19 mm、高さ254.35 mm、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=+90°である。yawはRVizで確認した前後の向きに合わせて180°補正した。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `back`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
+`VLP16_F` は旧位置で、前方18.6 mm、中央、高さ207 mm、前傾7°。`VLP16_B` は移設後の位置で、後方347.981 mm、中央、高さ515.158 mm、上下反転、レーザー上下軸が車体前方へ20°傾き、yaw=-90°である。点群のフレームと近距離セクタフィルタも選択位置に合わせる。`RPLIDAR_F` は前方3.19 mm、高さ254.35 mm、yaw=180°。移設後 `RPLIDAR_B` は x=-0.3095 m、y=0、z=0.49735 m、roll=180°（逆さま）、yaw=+90°である。yawはRVizで確認した前後の向きに合わせて180°補正した。両位置をTFに表示し、実際の `/scan` のフレームを `rplidar_mount:=front|back` で選ぶ。既定は `front`。`custom` は `RPLIDAR_custom` フレームを使う。ドライバの `inverted` は `false` のままにし、逆さまによる角度の反転はTFと車体セクタフィルタで扱う。
 
 VLP-16のROS起動時は `vlp16_power_manager` がセンサAPIでRPM 600を設定し、起動完了を確認する。bringupを通常終了するとRPM 0を送信し、センサが回転を止めてレーザーを無効にする。RPM 0への減速には数秒かかる。PCの電源断や強制killでは停止APIを実行できないため、停止状態を保証するには電源を切る。
 
