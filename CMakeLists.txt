@@ -49,6 +49,7 @@ if(BUILD_TESTING)
   target_link_libraries(test_terrain_grid terrain_grid)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_terrain_scene test/test_terrain_scene.py)
+  ament_add_pytest_test(test_terrain_parameters test/test_terrain_parameters.py)
 endif()
 
 ament_package()
