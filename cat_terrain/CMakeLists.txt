@@ -12,6 +12,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -38,7 +40,6 @@ install(TARGETS terrain_grid terrain_step_detector
 install(DIRECTORY include/ DESTINATION include)
 install(PROGRAMS scripts/terrain_pointcloud_generator
   DESTINATION lib/${PROJECT_NAME})
-install(FILES scripts/terrain_scene.py DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config launch rviz scenes DESTINATION share/${PROJECT_NAME})
 install(FILES README.md DESTINATION share/${PROJECT_NAME})
 

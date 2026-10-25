@@ -155,3 +155,16 @@ The 5.5 m recording limit is not a claim that every distance receives ground
 returns. On flat ground, the fixed VLP-16 beams leave increasingly wide gaps
 with distance. The history uses `odom` to bring successive scans into the
 same place; cells without enough returns remain unknown.
+
+## Code organization
+
+- `cat_terrain/scene.py`: ROS-independent scene geometry, ray casting, and motion.
+- `cat_terrain/scene_node.py`: ROS point cloud, marker, and TF publishing.
+- `scripts/terrain_pointcloud_generator`: executable entry point.
+- `src/terrain_grid.cpp`: ROS-independent radial terrain evaluation; the grid
+  is its output representation.
+- `src/terrain_step_detector.cpp`: ROS input transforms and output publishing.
+
+The Python modules are installed with `ament_cmake_python`, matching the
+other Python packages in this repository. The scene geometry tests import
+the package directly without adding the executable directory to `sys.path`.
