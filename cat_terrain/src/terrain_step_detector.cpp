@@ -80,7 +80,7 @@ public:
     up_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/up_cells", 1);
     drop_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/drop_cells", 1);
     cloud_subscription_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      cloud_topic_, rclcpp::SensorDataQoS(),
+      cloud_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable(),
       std::bind(&TerrainStepDetector::onCloud, this, std::placeholders::_1));
     stale_timer_ = create_wall_timer(
       std::chrono::milliseconds(200), std::bind(&TerrainStepDetector::onWatchdog, this));
