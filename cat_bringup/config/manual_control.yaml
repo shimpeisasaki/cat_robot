@@ -4,9 +4,8 @@ curvature_teleop:
   ros__parameters:
     update_period: 0.033333
     joystick_timeout: 0.5
-    joystick_deadzone: 0.02
-    curvature_deadzone: 0.03
-    normal_max_linear_speed: 0.9      # m/s; keeps full-steer yaw at or below 3.0 rad/s
+    normal_max_linear_speed: 1.0      # m/s at full forward/reverse stick when straight
+    full_steer_max_linear_speed: 0.6  # m/s at full forward/reverse stick and full steering
     maximum_curvature: 3.333333       # 1/m; minimum nominal turn radius is 0.30 m
 
 velocity_smoother_manual:
@@ -15,8 +14,8 @@ velocity_smoother_manual:
     smoothing_frequency: 30.0
     scale_velocities: True
     feedback: "OPEN_LOOP"
-    max_velocity: [1.666667, 0.0, 3.0]
-    min_velocity: [-1.666667, 0.0, -3.0]
+    max_velocity: [1.666667, 0.0, 2.0]
+    min_velocity: [-1.666667, 0.0, -2.0]
     max_accel: [0.5, 0.0, 1.2]
     max_decel: [-0.8, 0.0, -2.0]
     odom_topic: "/odom"

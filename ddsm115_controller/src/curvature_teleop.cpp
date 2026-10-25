@@ -23,15 +23,14 @@ public:
   : Node("curvature_teleop"),
     update_period_(declare_parameter("update_period", 0.02)),
     joystick_timeout_(declare_parameter("joystick_timeout", 0.5)),
-    joystick_deadzone_(declare_parameter("joystick_deadzone", 0.03)),
-    curvature_deadzone_(declare_parameter("curvature_deadzone", 0.05)),
     normal_max_linear_speed_(declare_parameter("normal_max_linear_speed", 1.0)),
+    full_steer_max_linear_speed_(declare_parameter("full_steer_max_linear_speed", 0.6)),
     maximum_curvature_(declare_parameter("maximum_curvature", 0.8))
   {
     if (update_period_ <= 0.0 || joystick_timeout_ <= 0.0 ||
-      joystick_deadzone_ < 0.0 || joystick_deadzone_ >= 1.0 ||
-      curvature_deadzone_ < 0.0 || curvature_deadzone_ >= 1.0 ||
       normal_max_linear_speed_ <= 0.0 ||
+      full_steer_max_linear_speed_ <= 0.0 ||
+      full_steer_max_linear_speed_ > normal_max_linear_speed_ ||
       maximum_curvature_ <= 0.0)
     {
       throw std::invalid_argument("Invalid curvature teleop parameter");
@@ -46,27 +45,19 @@ public:
       std::bind(&CurvatureTeleop::publish_command, this));
 
     RCLCPP_INFO(
-      get_logger(), "Curvature teleop: max %.3f m/s, max curvature %.3f 1/m",
-      normal_max_linear_speed_, maximum_curvature_);
+      get_logger(), "Curvature teleop: straight %.3f m/s, full steer %.3f m/s, "
+      "max curvature %.3f 1/m",
+      normal_max_linear_speed_, full_steer_max_linear_speed_, maximum_curvature_);
   }
 
 private:
-  static double apply_deadzone(double value, double deadzone)
-  {
-    value = std::clamp(value, -1.0, 1.0);
-    if (std::abs(value) <= deadzone) {
-      return 0.0;
-    }
-    return std::copysign((std::abs(value) - deadzone) / (1.0 - deadzone), value);
-  }
-
   void joystick_command(const sensor_msgs::msg::Joy & message)
   {
     last_joystick_time_ = std::chrono::steady_clock::now();
     const double right_horizontal = message.axes.size() > 3 ? message.axes[3] : 0.0;
     const double right_vertical = message.axes.size() > 4 ? message.axes[4] : 0.0;
-    linear_input_ = apply_deadzone(right_vertical, joystick_deadzone_);
-    curvature_input_ = apply_deadzone(right_horizontal, curvature_deadzone_);
+    linear_input_ = std::clamp(right_vertical, -1.0, 1.0);
+    curvature_input_ = std::clamp(right_horizontal, -1.0, 1.0);
 
     const auto pressed = [&message, this](std::size_t index) {
         return message.buttons.size() > index && message.buttons[index] == 1 &&
@@ -92,7 +83,10 @@ private:
     const bool joystick_online = seconds_since_joystick <= joystick_timeout_;
     geometry_msgs::msg::Twist command;
     if (drive_enabled_ && joystick_online) {
-      command.linear.x = linear_input_ * normal_max_linear_speed_;
+      const double steering = std::abs(curvature_input_);
+      const double speed_limit = normal_max_linear_speed_ -
+        (normal_max_linear_speed_ - full_steer_max_linear_speed_) * steering;
+      command.linear.x = linear_input_ * speed_limit;
       // Curvature drive: no translational command means no normal-mode spin.
       command.angular.z = command.linear.x * curvature_input_ * maximum_curvature_;
     }
@@ -101,9 +95,8 @@ private:
 
   double update_period_;
   double joystick_timeout_;
-  double joystick_deadzone_;
-  double curvature_deadzone_;
   double normal_max_linear_speed_;
+  double full_steer_max_linear_speed_;
   double maximum_curvature_;
   bool drive_enabled_{false};
   double linear_input_{0.0};
