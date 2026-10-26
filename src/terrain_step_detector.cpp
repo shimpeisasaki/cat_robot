@@ -85,6 +85,10 @@ public:
       create_publisher<std_msgs::msg::Float32MultiArray>("/terrain/coverage_by_range", 1);
     up_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/up_cells", 1);
     drop_cells_publisher_ = create_publisher<nav_msgs::msg::GridCells>("/terrain/drop_cells", 1);
+    if (declare_parameter("publish_history_cloud", false)) {
+      history_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+        "/terrain/retained_points", 1);
+    }
     cloud_subscription_ = create_subscription<sensor_msgs::msg::PointCloud2>(
       cloud_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable(),
       std::bind(&TerrainStepDetector::onCloud, this, std::placeholders::_1));
@@ -234,6 +238,7 @@ private:
 
     const auto result = grid_->update(
       world_points, pose, rclcpp::Time(cloud->header.stamp).seconds());
+    publishHistory(cloud->header.stamp);
     publishResult(
       result.hazards, result.up_steps, result.drop_offs, cloud->header.stamp,
       !world_points.empty() && result.observed_cells > 0);
@@ -264,6 +269,36 @@ private:
     const auto count = static_cast<std::size_t>(grid_->width() * grid_->height());
     const std::vector<int8_t> unknown(count, -1);
     publishResult(unknown, unknown, unknown, now(), false);
+    publishHistory(now());
+  }
+
+  void publishHistory(const rclcpp::Time & stamp)
+  {
+    if (!history_publisher_ || history_publisher_->get_subscription_count() == 0) {
+      return;
+    }
+    const auto points = grid_->retainedPoints();
+    sensor_msgs::msg::PointCloud2 message;
+    message.header.stamp = stamp;
+    message.header.frame_id = fixed_frame_;
+    sensor_msgs::PointCloud2Modifier modifier(message);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
+    modifier.resize(points.size());
+    message.is_dense = true;
+    if (!points.empty()) {
+      sensor_msgs::PointCloud2Iterator<float> x(message, "x");
+      sensor_msgs::PointCloud2Iterator<float> y(message, "y");
+      sensor_msgs::PointCloud2Iterator<float> z(message, "z");
+      for (const auto & point : points) {
+        *x = static_cast<float>(point.x);
+        *y = static_cast<float>(point.y);
+        *z = static_cast<float>(point.z);
+        ++x;
+        ++y;
+        ++z;
+      }
+    }
+    history_publisher_->publish(std::move(message));
   }
 
   void publishResult(
@@ -302,6 +337,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr coverage_publisher_;
   rclcpp::Publisher<nav_msgs::msg::GridCells>::SharedPtr up_cells_publisher_;
   rclcpp::Publisher<nav_msgs::msg::GridCells>::SharedPtr drop_cells_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr history_publisher_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscription_;
   rclcpp::TimerBase::SharedPtr stale_timer_;
   std::chrono::steady_clock::time_point last_good_cloud_time_{};

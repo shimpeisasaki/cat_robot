@@ -254,3 +254,24 @@ TEST(TerrainGrid, RejectsInvalidDimensionsBeforeConvertingToIndices)
   config.resolution = 1.0e-6;  // Individual dimensions fit, but their product does not.
   EXPECT_THROW(TerrainGrid{config}, std::invalid_argument);
 }
+
+TEST(TerrainGrid, RetainedPointsExposeCompressedWorldHistoryAndExpire)
+{
+  TerrainGrid grid({});
+  grid.update({{1.0, 0.0, 0.0}, {1.001, 0.0, 0.002}}, {}, 0.0);
+  auto points = grid.retainedPoints();
+  ASSERT_EQ(points.size(), 1U);
+  EXPECT_NEAR(points[0].x, 1.0005, 1.0e-8);
+  EXPECT_NEAR(points[0].z, 0.001, 1.0e-8);
+  // Rotation changes the evaluation sector, not the stored world coordinates.
+  grid.update({}, {0.5, 0.0, 0.0, 3.141592653589793}, 1.0);
+  points = grid.retainedPoints();
+  ASSERT_EQ(points.size(), 1U);
+  EXPECT_NEAR(points[0].x, 1.0005, 1.0e-8);
+  grid.update({}, {}, 2.01);
+  EXPECT_TRUE(grid.retainedPoints().empty());
+  grid.update({{1.0, 0.0, 0.0}}, {}, 2.1);
+  ASSERT_FALSE(grid.retainedPoints().empty());
+  grid.clear();
+  EXPECT_TRUE(grid.retainedPoints().empty());
+}
