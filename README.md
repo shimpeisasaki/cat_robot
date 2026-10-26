@@ -82,7 +82,7 @@ RPLIDARの `/scan` は取付位置に応じてLiDAR原点からの近距離測�
 
 現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。
 
-前方の地面の段差を試験的に検出するC++ノードは [cat_terrain](cat_terrain/README.md) に置く。既定ではベースリンクの前方0.6〜5.0 m、幅2.0 mを評価し、上り・下りの段差候補と距離帯ごとの観測率を配信する。Nav2やモーター指令にはまだ接続しない。
+地形検出は独立リポジトリ [terrain_detection](../terrain_detection/terrain_detection/README.md) へ移した。前方0.35〜3.0 m、幅2.0 mの段差を評価し、別ノードで最大60秒保持する。Nav2レイヤーは同リポジトリの `terrain_nav2`、一時SLAMと復帰ナビゲーションは [recovery_navigation](../recovery_navigation/recovery_navigation/README.md) が担当する。これらは実機ドライバを起動せず、実機の指令許可と停止は引き続き `cat_bringup` の基本安全制御が担当する。
 
 ## 操作と停止
 
