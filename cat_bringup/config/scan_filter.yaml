@@ -4,6 +4,7 @@ sector_scan_filter:
     mounting_roll: 3.141592653589793
     mounting_yaw: 1.5707963267948966
     front_angle_deg: 270.0
-    # Uniform 0.2 m exclusion in every direction, measured from the LiDAR.
+    # B and custom: 0.2 m all around. The RPLIDAR_F launch overrides the rear
+    # 90 degrees to 0.4 m. Distances are measured from the LiDAR origin.
     front_min_range: 0.2
     rear_min_range: 0.2

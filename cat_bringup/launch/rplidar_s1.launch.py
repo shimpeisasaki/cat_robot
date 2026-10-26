@@ -3,7 +3,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.actions import SetRemap
 from launch_ros.substitutions import FindPackageShare
@@ -39,5 +39,8 @@ def generate_launch_description():
                  'mounting_roll': ParameterValue(LaunchConfiguration('mounting_roll'),
                                                  value_type=float),
                  'mounting_yaw': ParameterValue(LaunchConfiguration('mounting_yaw'),
-                                                value_type=float)}]),
+                                                value_type=float),
+                 'rear_min_range': ParameterValue(PythonExpression([
+                     "0.4 if '", LaunchConfiguration('frame_id'),
+                     "' == 'RPLIDAR_F' else 0.2"]), value_type=float)}]),
     ])
