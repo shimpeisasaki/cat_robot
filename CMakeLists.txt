@@ -12,8 +12,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
-ament_python_install_package(${PROJECT_NAME})
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -38,9 +36,7 @@ install(TARGETS terrain_grid terrain_step_detector
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
-install(PROGRAMS scripts/terrain_pointcloud_generator
-  DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY config launch rviz scenes DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config launch rviz DESTINATION share/${PROJECT_NAME})
 install(FILES README.md DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
@@ -48,7 +44,6 @@ if(BUILD_TESTING)
   ament_add_gtest(test_terrain_grid test/test_terrain_grid.cpp)
   target_link_libraries(test_terrain_grid terrain_grid)
   find_package(ament_cmake_pytest REQUIRED)
-  ament_add_pytest_test(test_terrain_scene test/test_terrain_scene.py)
   ament_add_pytest_test(test_terrain_parameters test/test_terrain_parameters.py)
 endif()
 
