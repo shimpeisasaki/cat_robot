@@ -5,70 +5,12 @@ VLP-16 point clouds can identify ground steps in the CAT robot's forward path.
 Its internal representation is a set of radial ground profiles centred on the
 rear-mounted VLP-16; the 2D grids are output formats for RViz only.
 
-## Synthetic scenes
+## Simulation
 
-`terrain_pointcloud_generator` is a separate offline source of VLP-16-like
-`PointCloud2` data. It casts 16 nominal laser channels from the configured
-mounting position into YAML-defined horizontal surfaces and boxes. The default
-mount is the current `VLP16_B` position and orientation. This generator does
-not start any hardware. It publishes `/sim/velodyne_points` and matching
-`sim_odom -> sim_base_link -> sim_vlp16` transforms, so the terrain detector
-can run with the same time-alignment logic as it uses with real scans. RViz also
-shows the full scene as translucent `/sim/scene_markers`, including floor areas
-that receive no laser return. The existing CAT URDF is displayed as a robot
-model. Its link names are prefixed with `sim_` to keep its TF separate from
-any real robot.
-
-Both detector launches load `config/terrain.yaml`. Its wildcard node selector
-allows the simulation node name `sim_terrain_step_detector` to use the same
-settings; pass this file only to the detector. The simulation launch overrides
-input/output topics and TF frames to keep them under the simulation names.
-
-Build and view the default flat floor with two boxes:
-
-```bash
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select cat_terrain
-source install/setup.bash
-ros2 launch cat_terrain terrain_scene.launch.py show_rviz:=true
-```
-
-Choose a supplied scene or an absolute path to your own YAML file:
-
-```bash
-ros2 launch cat_terrain terrain_scene.launch.py scene:=$PWD/src/cat_robot/cat_terrain/scenes/drop_6cm.yaml show_rviz:=true
-```
-
-Edit a copy of a scene to create a new environment. The YAML uses metres and
-degrees:
-
-| Field | Meaning |
-|---|---|
-| `surfaces[].bounds_xy_m` | `[xmin, xmax, ymin, ymax]` of a horizontal floor patch |
-| `surfaces[].height_m` | Height of that patch; `0` is the starting floor |
-| `surfaces[].holes` | Rectangles removed from that patch; leave empty for ordinary floor |
-| `boxes[].center_m`, `size_m`, `yaw_deg` | Solid box position, dimensions, and optional rotation |
-| `robot.pose_xyzyaw_deg` | Initial base pose in `sim_odom` |
-| `robot.motion[]` | Timed commands with `duration_s`, `linear_speed_mps`, and `yaw_rate_deg_s` |
-| `sensor.range_noise_std_m`, `dropout_probability` | Optional independent range noise and missing returns |
-
-For a 6 cm drop, cut a rectangle out of the original floor and add a
-`height_m: -0.06` surface with the same bounds. Without the cutout, the higher
-floor hides the lower one. For an open gap, make a cutout and add no lower
-surface. For a 6 cm curb, add a box whose bottom is at zero and top at 0.06 m.
-The examples are `flat_boxes.yaml`, `drop_6cm.yaml`, and `gap_50cm.yaml` in
-`scenes/`. Add more surfaces and boxes to either list to build stairs or other
-obstacles. Restart the launch after editing the YAML.
-
-The `drop_6cm.yaml` example waits for 2 seconds, moves forward at 0.3 m/s for
-3 seconds, then stops. Each scan is ray-cast from the current pose and the
-corresponding odometry transform has the same timestamp. Motion is ideal and
-does not include wheel slip, per-point motion during a scan, or body motion
-over a drop. The nominal laser calibration is not an individual sensor
-calibration. Synthetic detections still need checking against recorded data.
-
-The simulation uses separate `/sim` topics and frames. The output remains an
-RViz experiment and is not connected to Nav2 or motor commands.
+The STL LiDAR simulator is maintained separately in the `cat_robot_sim`
+repository under `src/`. Its launch starts this package's detector with
+simulated point clouds and isolated TF frames. See that repository's README
+for STL coordinates, motion commands, and RViz use.
 
 The node subscribes to `/velodyne_points`. It records points up to `base_link`
 `x=5.5 m` in a 90-degree forward sector around the VLP-16. Only points with
@@ -163,13 +105,6 @@ same place; cells without enough returns remain unknown.
 
 ## Code organization
 
-- `cat_terrain/scene.py`: ROS-independent scene geometry, ray casting, and motion.
-- `cat_terrain/scene_node.py`: ROS point cloud, marker, and TF publishing.
-- `scripts/terrain_pointcloud_generator`: executable entry point.
 - `src/terrain_grid.cpp`: ROS-independent radial terrain evaluation; the grid
   is its output representation.
 - `src/terrain_step_detector.cpp`: ROS input transforms and output publishing.
-
-The Python modules are installed with `ament_cmake_python`, matching the
-other Python packages in this repository. The scene geometry tests import
-the package directly without adding the executable directory to `sys.path`.
