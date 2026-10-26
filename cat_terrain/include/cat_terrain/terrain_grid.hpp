@@ -59,6 +59,8 @@ class TerrainGrid
 public:
   explicit TerrainGrid(const Config & config);
   Result update(const std::vector<Point> & world_points, const Pose & robot, double stamp);
+  // Snapshot of compressed, retained observations in the fixed world frame.
+  std::vector<Point> retainedPoints() const;
   void clear() {history_.clear();}
   int width() const {return width_;}
   int height() const {return height_;}

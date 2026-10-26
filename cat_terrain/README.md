@@ -105,6 +105,14 @@ same place; cells without enough returns remain unknown.
 
 ## Code organization
 
+For debugging, set `publish_history_cloud:=true` as a node parameter to
+publish `/terrain/retained_points` (`PointCloud2`) in the fixed odometry frame.
+This is the actual compressed scan history, before confirmation and step
+classification, including observations that have moved outside the current
+evaluation sector. It expires with the detector history and clears when the
+input watchdog clears that history. Publishing is disabled by default and
+serialization runs only when there is a subscriber.
+
 - `src/terrain_grid.cpp`: ROS-independent radial terrain evaluation; the grid
   is its output representation.
 - `src/terrain_step_detector.cpp`: ROS input transforms and output publishing.

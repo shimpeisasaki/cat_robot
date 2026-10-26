@@ -400,4 +400,18 @@ Result TerrainGrid::update(
   return result;
 }
 
+std::vector<Point> TerrainGrid::retainedPoints() const
+{
+  std::size_t count = 0;
+  for (const auto & frame : history_) {
+    count += frame.points.size();
+  }
+  std::vector<Point> points;
+  points.reserve(count);
+  for (const auto & frame : history_) {
+    points.insert(points.end(), frame.points.begin(), frame.points.end());
+  }
+  return points;
+}
+
 }  // namespace cat_terrain
