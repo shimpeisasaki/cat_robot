@@ -74,7 +74,7 @@ class PanoramaCapture(Node):
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
         if self.odom_frames:
-            previous_stamp, previous_yaw, previous_unwrapped = self.odom_frames[-1]
+            previous_stamp, previous_yaw, previous_unwrapped = self.odom_frames[-1][:3]
             if stamp <= previous_stamp:
                 return
             yaw = previous_unwrapped + math.atan2(math.sin(yaw - previous_yaw),
