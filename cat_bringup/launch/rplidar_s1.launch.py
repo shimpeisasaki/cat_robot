@@ -41,6 +41,6 @@ def generate_launch_description():
                  'mounting_yaw': ParameterValue(LaunchConfiguration('mounting_yaw'),
                                                 value_type=float),
                  'rear_min_range': ParameterValue(PythonExpression([
-                     "0.4 if '", LaunchConfiguration('frame_id'),
+                     "0.6 if '", LaunchConfiguration('frame_id'),
                      "' == 'RPLIDAR_F' else 0.2"]), value_type=float)}]),
     ])

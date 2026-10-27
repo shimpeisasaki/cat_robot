@@ -30,19 +30,22 @@ class SectorFilterTest(unittest.TestCase):
         for bearing in (-135, 0, 135):
             self.assertEqual(filter_ranges(
                 [0.3], math.radians(bearing - 180), 0, math.pi,
-                math.radians(270), 0.2, 0.4)[0], 0.3)
+                math.radians(270), 0.2, 0.6)[0], 0.3)
         for bearing in (-136, 180, 136):
             self.assertTrue(math.isnan(filter_ranges(
                 [0.3], math.radians(bearing - 180), 0, math.pi,
-                math.radians(270), 0.2, 0.4)[0]))
+                math.radians(270), 0.2, 0.6)[0]))
+            self.assertTrue(math.isnan(filter_ranges(
+                [0.599], math.radians(bearing - 180), 0, math.pi,
+                math.radians(270), 0.2, 0.6)[0]))
             self.assertEqual(filter_ranges(
-                [0.4], math.radians(bearing - 180), 0, math.pi,
-                math.radians(270), 0.2, 0.4)[0], 0.4)
+                [0.6], math.radians(bearing - 180), 0, math.pi,
+                math.radians(270), 0.2, 0.6)[0], 0.6)
 
     def test_launch_selects_mask_from_scan_frame(self):
         launch_path = (Path(__file__).resolve().parents[1] /
                        'launch/rplidar_s1.launch.py')
-        for frame, expected in [('RPLIDAR_F', 0.4), ('RPLIDAR_B', 0.2),
+        for frame, expected in [('RPLIDAR_F', 0.6), ('RPLIDAR_B', 0.2),
                                 ('RPLIDAR_custom', 0.2)]:
             with tempfile.TemporaryDirectory() as log_dir, patch.dict(
                     os.environ, {'ROS_LOG_DIR': log_dir}):
