@@ -85,9 +85,11 @@ def test_late_start_cleanup_can_retry_after_transport_failure():
 def test_centered_arc_prepares_scans_and_returns():
     node = SimpleNamespace(
         state='prepare', heading=0.0, half_angle=math.radians(60),
-        step=math.radians(12), speed=.26, phase_at=time.monotonic(),
+        step=math.radians(12), speed=.26, minimum_speed=.15,
+        phase_at=time.monotonic(),
         action_goal=None, pending=None, frames=10, frame_count=0,
-        centered=True, target=math.radians(120), stationary_since=None,
+        centered=True, target=math.radians(120), recovery_observation=False,
+        stationary_since=None,
         motor_at=time.monotonic(), motor_ok=True, stationary=False,
         odom_at=time.monotonic(),
         capture_status={'state': 'recording'}, safety_at=time.monotonic(),
@@ -133,6 +135,40 @@ def test_centered_arc_prepares_scans_and_returns():
     node.heading = 0.0
     PanoramaRotate.tick(node)
     assert node.state == 'finish_settle'
+
+
+def test_panorama_scan_uses_drivable_minimum_angular_speed():
+    node = SimpleNamespace(
+        state='scan', heading=2*math.pi-math.radians(5), half_angle=0.,
+        step=math.radians(15), speed=.26, minimum_speed=.15,
+        phase_at=time.monotonic(), action_goal=None, pending=None,
+        frames=24, frame_count=24, centered=False, target=2*math.pi,
+        recovery_observation=False,
+        motor_at=time.monotonic(), motor_ok=True, odom_at=time.monotonic(),
+        capture_status={'state': 'recording'}, zero=Mock(),
+        poll_service=Mock(), poll_late_start=Mock(), abort=Mock(),
+        publish_command=Mock(), fresh=lambda stamp: time.monotonic()-stamp < .7,
+        panorama_enabled=lambda: True)
+    PanoramaRotate.tick(node)
+    node.publish_command.assert_called_once_with(.15)
+
+
+def test_recovery_full_sweep_finishes_after_last_frame():
+    node = SimpleNamespace(
+        state='scan', heading=2*math.pi-math.radians(6), half_angle=0.,
+        step=math.radians(15), speed=.26, minimum_speed=.15,
+        phase_at=time.monotonic(), action_goal=None, pending=None,
+        frames=24, frame_count=24, centered=False, target=2*math.pi,
+        recovery_observation=True, stationary_since=None,
+        motor_at=time.monotonic(), motor_ok=True, odom_at=time.monotonic(),
+        capture_status={'state': 'recording'}, zero=Mock(),
+        poll_service=Mock(), poll_late_start=Mock(), abort=Mock(),
+        publish_command=Mock(), fresh=lambda stamp: time.monotonic()-stamp < .7,
+        panorama_enabled=lambda: True)
+    PanoramaRotate.tick(node)
+    assert node.state == 'finish_settle'
+    node.zero.assert_called_once()
+    node.publish_command.assert_not_called()
 
 
 def test_timed_out_start_is_cancelled_when_its_reply_arrives():

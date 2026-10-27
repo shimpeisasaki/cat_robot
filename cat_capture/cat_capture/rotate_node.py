@@ -28,9 +28,10 @@ class PanoramaRotate(Node):
         self.default_frames = self.frames
         requested_speed = float(self.declare_parameter('angular_speed', 0.26).value)
         self.speed = min(requested_speed, 0.26)
+        self.minimum_speed = float(self.declare_parameter('minimum_angular_speed', 0.15).value)
         self.rb_button = int(self.declare_parameter('panorama_button', 5).value)
-        if not 3 <= self.frames <= 255 or self.speed <= 0:
-            raise ValueError('frames must be 3..255 and angular_speed > 0')
+        if not 3 <= self.frames <= 255 or self.speed <= 0 or not 0 < self.minimum_speed <= self.speed:
+            raise ValueError('frames must be 3..255 and 0 < minimum_angular_speed <= angular_speed')
         self.step = 2 * math.pi / self.frames
         self.cmd = self.create_publisher(Twist, '/cmd_vel_panorama', 1)
         self.recovery_cmd = self.create_publisher(TwistStamped, '/recovery/observation_command', 1)
@@ -428,7 +429,7 @@ class PanoramaRotate(Node):
             elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
                 self.abort('Timed out turning to capture start')
             else:
-                self.publish_command(-min(self.speed, max(0.06, remaining * 0.8)))
+                self.publish_command(-min(self.speed, max(self.minimum_speed, remaining * 0.8)))
             return
         if self.state in ('prepare_settle', 'scan_settle'):
             self.stationary_since = (self.stationary_since or now) if self.stationary else None
@@ -446,6 +447,11 @@ class PanoramaRotate(Node):
                 feedback.degrees_turned = math.degrees(self.heading + self.half_angle)
                 self.action_goal.publish_feedback(feedback)
             scan_end = self.half_angle if self.centered else self.target
+            if self.recovery_observation and not self.centered and self.frame_count == self.frames:
+                # All requested bearings have been captured. Recovery does not
+                # require returning to the exact initial heading, and low RPM
+                # can stall during the final half-step of a full circle.
+                scan_end -= self.step / 2
             remaining = scan_end - self.heading
             if remaining <= tolerance:
                 self.zero()
@@ -456,9 +462,10 @@ class PanoramaRotate(Node):
                   self.heading >= -self.half_angle + (self.frame_count + 1.5) * self.step):
                 self.abort('Missed a capture angle')
             elif now - self.phase_at > max(40, 2 * self.target / self.speed + 10):
-                self.abort(f'Turn timed out: {math.degrees(remaining):.1f} deg remaining')
+                self.abort(f'Turn timed out: {math.degrees(remaining):.1f} deg remaining, '
+                           f'{self.frame_count}/{self.frames} frames captured')
             else:
-                self.publish_command(min(self.speed, max(0.06, remaining * 0.8)))
+                self.publish_command(min(self.speed, max(self.minimum_speed, remaining * 0.8)))
                 if (self.pending is None and self.frame_count < self.frames and
                         self.heading >= -self.half_angle + (self.frame_count + 0.5) * self.step):
                     self.call('capture')
@@ -473,7 +480,7 @@ class PanoramaRotate(Node):
             elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
                 self.abort('Timed out returning to starting heading')
             else:
-                self.publish_command(-min(self.speed, max(0.06, self.heading * 0.8)))
+                self.publish_command(-min(self.speed, max(self.minimum_speed, self.heading * 0.8)))
             return
         if self.state == 'finish_settle':
             self.stationary_since = (self.stationary_since or now) if self.stationary else None
