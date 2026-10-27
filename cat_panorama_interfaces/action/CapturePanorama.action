@@ -2,6 +2,8 @@
 uint8 frames
 # Set to 0 for a full 360-degree turn. Otherwise capture this centered arc in degrees.
 float32 angle_deg
+# Keep navigation selected and route rotation through the recovery observation gate.
+bool recovery_observation
 ---
 bool success
 string path

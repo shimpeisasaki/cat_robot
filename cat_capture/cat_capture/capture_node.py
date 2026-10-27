@@ -79,22 +79,28 @@ class PanoramaCapture(Node):
                 return
             yaw = previous_unwrapped + math.atan2(math.sin(yaw - previous_yaw),
                                                    math.cos(yaw - previous_yaw))
-        self.odom_frames.append((stamp, math.atan2(math.sin(yaw), math.cos(yaw)), yaw))
+        p = msg.pose.pose.position
+        self.odom_frames.append((stamp, math.atan2(math.sin(yaw), math.cos(yaw)), yaw, p.x, p.y))
 
-    def image_yaw(self, stamp):
+    def image_pose(self, stamp):
         if not self.odom_frames or self.odom_frames[-1][0] < stamp:
             return None
         before = None
         for sample in self.odom_frames:
             if sample[0] >= stamp:
                 if before is None:
-                    return sample[2] if sample[0] - stamp <= 150_000_000 else None
+                    return sample[2:] if sample[0] - stamp <= 150_000_000 else None
                 if stamp - before[0] > 150_000_000 or sample[0] - stamp > 150_000_000:
                     return None
                 fraction = (stamp - before[0]) / (sample[0] - before[0])
-                return before[2] + fraction * (sample[2] - before[2])
+                return tuple(before[i] + fraction * (sample[i] - before[i])
+                             for i in (2, 3, 4))
             before = sample
         return None
+
+    def image_yaw(self, stamp):
+        pose = self.image_pose(stamp)
+        return pose[0] if pose is not None else None
 
     def ready(self):
         return (bool(self.rgb_frames) and
@@ -125,9 +131,9 @@ class PanoramaCapture(Node):
             response.success, response.message = True, 'Waiting for RGB image'
         return response
 
-    def save_frame(self, rgb, angle_deg):
+    def save_frame(self, rgb, angle_deg, metadata=None):
         image = self.bridge.imgmsg_to_cv2(rgb, desired_encoding='bgr8').copy()
-        return self.session.capture(image, angle_deg)
+        return self.session.capture(image, angle_deg, metadata)
 
     def finish(self, _, response):
         if self.state != 'recording' or self.pending_capture:
@@ -184,12 +190,18 @@ class PanoramaCapture(Node):
                     if stamp is not None:
                         candidate = self.rgb_frames[stamp]
                 if candidate is not None:
-                    yaw = self.image_yaw(Time.from_msg(candidate.header.stamp).nanoseconds)
-                    if yaw is not None:
+                    pose = self.image_pose(Time.from_msg(candidate.header.stamp).nanoseconds)
+                    if pose is not None:
+                        yaw, x, y = pose
                         if self.first_yaw is None:
                             self.first_yaw = yaw
                         angle_deg = math.degrees(yaw - self.first_yaw)
-                        self.jobs.append(('capture', self.pool.submit(self.save_frame, candidate, angle_deg)))
+                        metadata = dict(stamp=candidate.header.stamp.sec +
+                                        candidate.header.stamp.nanosec * 1e-9,
+                                        frame=candidate.header.frame_id,
+                                        odom_pose=[x, y, math.atan2(math.sin(yaw), math.cos(yaw))])
+                        self.jobs.append(('capture', self.pool.submit(self.save_frame, candidate,
+                                                                      angle_deg, metadata)))
                         self.pending_capture = None
         ready = self.ready()
         self.status.publish(String(data=json.dumps({

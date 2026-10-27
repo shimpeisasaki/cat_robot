@@ -37,6 +37,35 @@ def test_only_one_action_goal_can_be_reserved():
     assert PanoramaRotate.accept_goal(node, request) == GoalResponse.REJECT
 
 
+def test_recovery_capture_keeps_navigation_mode_and_uses_observation_gate():
+    node = SimpleNamespace(default_frames=24, recovery_observation=False,
+                           call=Mock(), get_logger=Mock(),
+                           safety_at=time.monotonic(), safety_mode=2,
+                           safety_source='navigation', recovery_active=True,
+                           recovery_active_at=time.monotonic(),
+                           fresh=lambda stamp: time.monotonic()-stamp < .7,
+                           recovery_cmd=SimpleNamespace(publish=Mock()),
+                           cmd=SimpleNamespace(publish=Mock()),
+                           get_clock=Mock())
+    node.get_clock.return_value.now.return_value.to_msg.return_value = Joy().header.stamp
+    PanoramaRotate.begin(node, 24, 0., True)
+    assert node.call.call_count == 0
+    assert PanoramaRotate.panorama_enabled(node)
+    PanoramaRotate.publish_command(node, .2)
+    assert node.recovery_cmd.publish.call_args.args[0].twist.angular.z == .2
+    node.cmd.publish.assert_not_called()
+    node.recovery_active = False
+    assert not PanoramaRotate.panorama_enabled(node)
+
+
+def test_recovery_capture_completion_does_not_brake():
+    node = SimpleNamespace(recovery_observation=True, zero=Mock(), complete_goal=Mock())
+    PanoramaRotate.finish_and_brake(node)
+    assert node.state == 'idle'
+    node.zero.assert_called_once()
+    node.complete_goal.assert_called_once_with('success', 'Panorama frames saved')
+
+
 def test_late_start_cleanup_can_retry_after_transport_failure():
     start, cleanup = Future(), Future()
     start.set_result(SimpleNamespace(success=True))
@@ -64,9 +93,11 @@ def test_centered_arc_prepares_scans_and_returns():
         capture_status={'state': 'recording'}, safety_at=time.monotonic(),
         safety_mode=2, safety_reason='PANORAMA: active',
         cmd=SimpleNamespace(publish=Mock()), zero=Mock(),
+        publish_command=None,
         poll_service=Mock(), poll_late_start=Mock(), abort=Mock(), call=Mock(return_value=True),
         fresh=lambda stamp: time.monotonic() - stamp < .7,
         panorama_enabled=lambda: True)
+    node.publish_command = lambda angular_z: node.cmd.publish(SimpleNamespace(angular=SimpleNamespace(z=angular_z)))
     PanoramaRotate.tick(node)
     assert node.cmd.publish.call_args.args[0].angular.z < 0
     node.heading = math.radians(-55)
@@ -113,7 +144,7 @@ def test_timed_out_start_is_cancelled_when_its_reply_arrives():
         state='start_request', pending=('start', start, time.monotonic()-6),
         late_start=None, cleanup_future=None, session_active=False,
         action_goal=None, goal_reserved=False, service_clients={'cancel': cancel_client},
-        zero=Mock(), get_logger=Mock())
+        recovery_observation=False, zero=Mock(), get_logger=Mock())
     node.abort = lambda reason: PanoramaRotate.abort(node, reason)
     PanoramaRotate.poll_service(node)
     assert node.state == 'brake_request' and node.late_start is start

@@ -14,10 +14,10 @@ from rclpy.task import Future
 from cat_panorama_interfaces.action import CapturePanorama
 from cat_panorama_interfaces.srv import StartCapture
 from cat_control_interfaces.msg import ControlState
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Joy
-from std_msgs.msg import String, UInt8
+from std_msgs.msg import Bool, String, UInt8
 from std_srvs.srv import Trigger
 
 
@@ -33,6 +33,10 @@ class PanoramaRotate(Node):
             raise ValueError('frames must be 3..255 and angular_speed > 0')
         self.step = 2 * math.pi / self.frames
         self.cmd = self.create_publisher(Twist, '/cmd_vel_panorama', 1)
+        self.recovery_cmd = self.create_publisher(TwistStamped, '/recovery/observation_command', 1)
+        self.recovery_active = False
+        self.recovery_active_at = 0.0
+        self.create_subscription(Bool, '/recovery/active', self.on_recovery_active, 1)
         self.create_subscription(Joy, '/joy', self.on_joy, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/odom', self.on_odom, qos_profile_sensor_data)
         self.create_subscription(UInt8, '/base/state', self.on_motor, 1)
@@ -82,6 +86,7 @@ class PanoramaRotate(Node):
         self.phase_at = 0.0
         self.stationary_since = None
         self.session_active = False
+        self.recovery_observation = False
         self.create_timer(0.05, self.tick)
         self.get_logger().info(f'Panorama frame capture ready; {self.frames} frames')
 
@@ -117,7 +122,8 @@ class PanoramaRotate(Node):
         self.action_goal = goal_handle
         self.action_future = Future()
         self.begin(goal_handle.request.frames or self.default_frames,
-                   goal_handle.request.angle_deg)
+                   goal_handle.request.angle_deg,
+                   getattr(goal_handle.request, 'recovery_observation', False))
         outcome, path, message = await self.action_future
         result = CapturePanorama.Result()
         result.success, result.path, result.message = outcome == 'success', path, message
@@ -164,6 +170,10 @@ class PanoramaRotate(Node):
         self.safety_reason = msg.reason
         self.safety_at = time.monotonic()
 
+    def on_recovery_active(self, msg):
+        self.recovery_active = msg.data
+        self.recovery_active_at = time.monotonic()
+
     def on_capture(self, msg):
         try:
             self.capture_status = json.loads(msg.data)
@@ -171,8 +181,9 @@ class PanoramaRotate(Node):
         except (ValueError, TypeError):
             self.capture_status = {}
 
-    def begin(self, frames=None, angle_deg=0.0):
+    def begin(self, frames=None, angle_deg=0.0, recovery_observation=False):
         self.frames = frames or self.default_frames
+        self.recovery_observation = recovery_observation
         self.centered = angle_deg > 0
         self.angle_deg = angle_deg if self.centered else 360.0
         self.target = math.radians(self.angle_deg)
@@ -189,7 +200,7 @@ class PanoramaRotate(Node):
         self.outcome_message = ''
         self.drive_requested = False
         self.pending = None
-        if self.call('panorama'):
+        if self.recovery_observation or self.call('panorama'):
             self.drive_requested = True
         self.get_logger().info('Panorama frames requested; waiting for motor, odometry and RGB')
 
@@ -198,10 +209,23 @@ class PanoramaRotate(Node):
 
     def panorama_enabled(self):
         return (self.fresh(self.safety_at) and self.safety_mode == 2 and
-                self.safety_source == 'panorama')
+                (self.safety_source == 'navigation' and self.recovery_active and
+                 self.fresh(self.recovery_active_at)
+                 if self.recovery_observation else self.safety_source == 'panorama'))
 
     def zero(self):
-        self.cmd.publish(Twist())
+        self.publish_command(0.)
+
+    def publish_command(self, angular_z):
+        if self.recovery_observation:
+            msg = TwistStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.twist.angular.z = angular_z
+            self.recovery_cmd.publish(msg)
+        else:
+            msg = Twist()
+            msg.angular.z = angular_z
+            self.cmd.publish(msg)
 
     def call(self, name):
         client = self.service_clients[name]
@@ -280,6 +304,9 @@ class PanoramaRotate(Node):
         if operator:
             self.state = 'idle'  # base_safety handles B, X or Y.
             self.complete_goal(self.outcome, reason)
+        elif self.recovery_observation:
+            self.state = 'idle'
+            self.complete_goal(self.outcome, reason)
         else:
             self.state, self.phase_at = 'brake_request', time.monotonic()
 
@@ -287,7 +314,12 @@ class PanoramaRotate(Node):
         self.session_active = False
         self.outcome = 'success'
         self.outcome_message = 'Panorama frames saved'
-        self.state, self.phase_at = 'brake_request', time.monotonic()
+        if self.recovery_observation:
+            self.zero()
+            self.state = 'idle'
+            self.complete_goal('success', self.outcome_message)
+        else:
+            self.state, self.phase_at = 'brake_request', time.monotonic()
 
     def poll_late_start(self):
         """Retire a start request that completed after its action was abandoned."""
@@ -353,7 +385,8 @@ class PanoramaRotate(Node):
             if now - self.started_at > 60:
                 self.abort('Motor, VIO or RGB did not become ready within 60 s')
                 return
-            if not self.drive_requested and self.pending is None and self.call('panorama'):
+            if not self.drive_requested and self.pending is None and (
+                    self.recovery_observation or self.call('panorama')):
                 self.drive_requested = True
             ready = (self.fresh(self.odom_at) and self.fresh(self.motor_at) and self.motor_ok and
                      self.fresh(self.capture_at) and self.capture_status.get('ready') and
@@ -395,9 +428,7 @@ class PanoramaRotate(Node):
             elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
                 self.abort('Timed out turning to capture start')
             else:
-                command = Twist()
-                command.angular.z = -min(self.speed, max(0.06, remaining * 0.8))
-                self.cmd.publish(command)
+                self.publish_command(-min(self.speed, max(0.06, remaining * 0.8)))
             return
         if self.state in ('prepare_settle', 'scan_settle'):
             self.stationary_since = (self.stationary_since or now) if self.stationary else None
@@ -427,9 +458,7 @@ class PanoramaRotate(Node):
             elif now - self.phase_at > max(40, 2 * self.target / self.speed + 10):
                 self.abort(f'Turn timed out: {math.degrees(remaining):.1f} deg remaining')
             else:
-                command = Twist()
-                command.angular.z = min(self.speed, max(0.06, remaining * 0.8))
-                self.cmd.publish(command)
+                self.publish_command(min(self.speed, max(0.06, remaining * 0.8)))
                 if (self.pending is None and self.frame_count < self.frames and
                         self.heading >= -self.half_angle + (self.frame_count + 0.5) * self.step):
                     self.call('capture')
@@ -444,9 +473,7 @@ class PanoramaRotate(Node):
             elif now - self.phase_at > max(20, 2 * self.half_angle / self.speed + 10):
                 self.abort('Timed out returning to starting heading')
             else:
-                command = Twist()
-                command.angular.z = -min(self.speed, max(0.06, self.heading * 0.8))
-                self.cmd.publish(command)
+                self.publish_command(-min(self.speed, max(0.06, self.heading * 0.8)))
             return
         if self.state == 'finish_settle':
             self.stationary_since = (self.stationary_since or now) if self.stationary else None
@@ -466,7 +493,7 @@ class PanoramaRotate(Node):
         self.zero()
         if self.session_active and self.service_clients['cancel'].service_is_ready():
             self.service_clients['cancel'].call_async(Trigger.Request())
-        if self.service_clients['brake'].service_is_ready():
+        if not self.recovery_observation and self.service_clients['brake'].service_is_ready():
             self.service_clients['brake'].call_async(Trigger.Request())
             deadline = time.monotonic() + 3
             while rclpy.ok() and time.monotonic() < deadline and self.safety_mode != 0:

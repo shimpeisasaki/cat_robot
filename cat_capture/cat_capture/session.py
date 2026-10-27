@@ -1,5 +1,6 @@
 """Save ordered RGB frames without generating a stitched panorama."""
 from datetime import datetime
+import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -25,8 +26,9 @@ class CaptureSession:
         else:
             raise FileExistsError(f'Too many capture sessions at {name}')
         self.frames = []
+        self.metadata = []
 
-    def capture(self, bgr, angle_deg):
+    def capture(self, bgr, angle_deg, metadata=None):
         stem = f'f{len(self.frames):02d}'
         rounded_angle = round(angle_deg, 1) % 360
         rgb_path = self.path / f'{stem}_{rounded_angle:05.1f}deg_rgb.jpg'
@@ -39,7 +41,11 @@ class CaptureSession:
             rgb_path.unlink(missing_ok=True)
             raise OSError(f'Could not save {rgb_path}')
         self.frames.append(rgb_path)
+        if metadata is not None:
+            self.metadata.append(dict(file=rgb_path.name, **metadata))
         return len(self.frames)
 
     def finish(self):
+        if self.metadata:
+            (self.path / 'frames.json').write_text(json.dumps(self.metadata, indent=2))
         return str(self.path)
