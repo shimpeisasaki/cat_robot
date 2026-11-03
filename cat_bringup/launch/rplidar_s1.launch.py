@@ -14,6 +14,7 @@ def generate_launch_description():
     sllidar_share = FindPackageShare('sllidar_ros2')
     return LaunchDescription([
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
+        DeclareLaunchArgument('front_blind_rear_angle_deg', default_value='90.0'),
         DeclareLaunchArgument('frame_id', default_value='RPLIDAR_B'),
         DeclareLaunchArgument('mounting_roll', default_value='3.141592653589793'),
         DeclareLaunchArgument('mounting_yaw', default_value='1.5707963267948966'),
@@ -40,6 +41,10 @@ def generate_launch_description():
                                                  value_type=float),
                  'mounting_yaw': ParameterValue(LaunchConfiguration('mounting_yaw'),
                                                 value_type=float),
+                 'blind_rear_angle_deg': ParameterValue(PythonExpression([
+                     LaunchConfiguration('front_blind_rear_angle_deg'),
+                     " if '", LaunchConfiguration('frame_id'),
+                     "' == 'RPLIDAR_F' else 0.0"]), value_type=float),
                  'rear_min_range': ParameterValue(PythonExpression([
                      "0.6 if '", LaunchConfiguration('frame_id'),
                      "' == 'RPLIDAR_F' else 0.2"]), value_type=float)}]),

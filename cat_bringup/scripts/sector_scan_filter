@@ -9,7 +9,7 @@ from sensor_msgs.msg import LaserScan
 
 
 def filter_ranges(ranges, angle_min, angle_increment, mounting_yaw,
-                  front_angle, front_min, rear_min, angle_direction=1.0):
+                  front_angle, front_min, rear_min, angle_direction=1.0, blind_rear_angle=0.0):
     result = list(ranges)
     for i, distance in enumerate(ranges):
         bearing = angle_direction * (angle_min + i * angle_increment) + mounting_yaw
@@ -17,7 +17,9 @@ def filter_ranges(ranges, angle_min, angle_increment, mounting_yaw,
         threshold = front_min if abs(bearing) <= front_angle / 2 + 1e-9 else rear_min
         # Treat excluded returns as unknown, never as free space (+infinity).
         # Small tolerance accounts for LaserScan's float32 representation.
-        if math.isfinite(distance) and distance < threshold - 1e-7:
+        blind = (blind_rear_angle > 0 and
+                 abs(bearing) >= math.pi-blind_rear_angle/2-1e-9)
+        if blind or (math.isfinite(distance) and distance < threshold - 1e-7):
             result[i] = float('nan')
     return result
 
@@ -30,11 +32,14 @@ class SectorScanFilter(Node):
         self.yaw = float(self.declare_parameter('mounting_yaw', math.pi).value)
         self.front_angle = math.radians(float(
             self.declare_parameter('front_angle_deg', 200.0).value))
+        self.blind_rear_angle = math.radians(float(
+            self.declare_parameter('blind_rear_angle_deg', 0.0).value))
         self.front_min = float(self.declare_parameter('front_min_range', 0.1).value)
         self.rear_min = float(self.declare_parameter('rear_min_range', 0.4).value)
         if (not all(math.isfinite(v) for v in
-                    [self.roll, self.yaw, self.front_angle, self.front_min, self.rear_min]) or
+                    [self.roll, self.yaw, self.front_angle, self.front_min, self.rear_min, self.blind_rear_angle]) or
                 min(abs(self.roll), abs(abs(self.roll) - math.pi)) > 1e-5 or
+                not 0 <= self.blind_rear_angle < 2*math.pi or
                 not 0 < self.front_angle <= 2 * math.pi or
                 min(self.front_min, self.rear_min) < 0):
             raise ValueError('Invalid angular range filter parameters')
@@ -55,7 +60,8 @@ class SectorScanFilter(Node):
             return
         scan.ranges = filter_ranges(
             scan.ranges, scan.angle_min, scan.angle_increment, self.yaw,
-            self.front_angle, self.front_min, self.rear_min, self.angle_direction)
+            self.front_angle, self.front_min, self.rear_min, self.angle_direction,
+            self.blind_rear_angle)
         # Keep stamp, frame, range_min/max, angles and timing unchanged.
         self.pub.publish(scan)
 

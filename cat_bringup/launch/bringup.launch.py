@@ -37,6 +37,7 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
                               choices=['front', 'back', 'custom', 'legacy']),
+        DeclareLaunchArgument('rplidar_front_blind_rear_angle_deg', default_value='90.0'),
         DeclareLaunchArgument('rplidar_x', default_value='0.03319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -133,6 +134,7 @@ def generate_launch_description():
                 LaunchConfiguration('lidar_source'), "' in ('rplidar', 'both')"])),
             launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
                               'frame_id': rplidar_frame,
+                              'front_blind_rear_angle_deg': LaunchConfiguration('rplidar_front_blind_rear_angle_deg'),
                               'mounting_roll': rplidar_roll,
                               'mounting_yaw': rplidar_yaw}.items()),
         IncludeLaunchDescription(

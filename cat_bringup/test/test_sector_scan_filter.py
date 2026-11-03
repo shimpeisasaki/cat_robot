@@ -14,6 +14,15 @@ filter_ranges = runpy.run_path(str(
 
 
 class SectorFilterTest(unittest.TestCase):
+    def test_blind_rear_sector_is_unknown_even_for_infinite_or_far_returns(self):
+        for distance in (.3, 2., float('inf')):
+            self.assertTrue(math.isnan(filter_ranges(
+                [distance], 0., 0., math.pi, math.radians(270), .2, .6,
+                blind_rear_angle=math.pi/2)[0]))
+        self.assertEqual(filter_ranges(
+            [2.], math.pi, 0., math.pi, math.radians(270), .2, .6,
+            blind_rear_angle=math.pi/2)[0], 2.)
+
     def test_back_mask_is_uniform(self):
         config = yaml.safe_load((Path(__file__).resolve().parents[1] /
                                  'config/scan_filter.yaml').read_text())

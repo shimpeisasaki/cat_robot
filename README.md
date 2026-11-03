@@ -80,6 +80,8 @@ VLP-16のROS起動時は `vlp16_power_manager` がセンサAPIでRPM 600を設�
 
 RPLIDARの `/scan` は取付位置に応じてLiDAR原点からの近距離測定を無効化する。`RPLIDAR_F`（`rplidar_mount:=front|legacy`）では車体前方側270°を0.2 m未満、後方側90°を0.6 m未満とし、`RPLIDAR_B`（`rplidar_mount:=back`）と `custom` では全周0.2 m未満とする。選択したフレームに応じて起動時に自動で切り替わる。VLP-16は点群変換時の下限を0.1 mとし、車体前方側270°は0.1 m未満、後方側90°は0.6 m未満を `/velodyne_points` で無効化する。VLP-16のセクタは選択中の取付位置に応じた角度で車体方向を判定する。これはソフトウェアのマスク値であり、センサの近距離測定能力を保証する値ではない。
 
+`RPLIDAR_F` は車体に遮られる後方を未観測として扱うため、車体基準の後方90°を測距値にかかわらずNaNにする。`/scan_raw` は保持する。bringup引数 `rplidar_front_blind_rear_angle_deg`（既定90）で変更できるが、角度は実際の記録で検証する必要がある。従来の近距離マスクも引き続き適用する。後方取付とcustomには、この前方取付用の死角マスクを自動適用しない。
+
 現時点でVLP-16の点群をNav2の `/scan` に変換していない。地図作成、自己位置推定、ナビゲーションは従来どおりRPLIDARの `/scan` を使う。
 
 地形検出は独立リポジトリ [terrain_detection](../terrain_detection/terrain_detection/README.md) へ移した。前方0.35〜3.0 m、幅2.0 mの段差を評価し、別ノードで最大60秒保持する。Nav2レイヤーは同リポジトリの `terrain_nav2`、一時SLAMと復帰ナビゲーションは [recovery_navigation](../recovery_navigation/recovery_navigation/README.md) が担当する。これらは実機ドライバを起動せず、実機の指令許可と停止は引き続き `cat_bringup` の基本安全制御が担当する。
