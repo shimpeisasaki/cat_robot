@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Record stationary raw Horizon IMU; estimate gyro bias with held-out data.
+
+Subscribes only: start the Horizon separately and keep it stationary. Raw
+acceleration must be in SDK g units. A single pose cannot calibrate accel bias.
+"""
+import argparse
+import csv
+import json
+from pathlib import Path
+import time
+
+import numpy as np
+import rclpy
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Imu
+import yaml
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--topic', default='/livox/imu_raw')
+    parser.add_argument('--pose-description', default='stationary; orientation unspecified')
+    args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=False)
+    rclpy.init()
+    node = rclpy.create_node('horizon_imu_calibration')
+    rows = []
+    first = None
+    last_receive = time.monotonic()
+    phase_name = None
+
+    def receive(msg):
+        nonlocal first, last_receive, phase_name
+        now = time.monotonic()
+        last_receive = now
+        if first is None:
+            first = now
+        elapsed = now - first
+        phase = 'warmup' if elapsed < 60 else ('calibration' if elapsed < 120 else 'validation')
+        if phase != phase_name:
+            print(f'{phase}: keep the Horizon stationary', flush=True)
+            phase_name = phase
+        gyro = msg.angular_velocity
+        acc = msg.linear_acceleration
+        rows.append([phase, elapsed, msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                     gyro.x, gyro.y, gyro.z, acc.x, acc.y, acc.z])
+
+    sub = node.create_subscription(Imu, args.topic, receive, qos_profile_sensor_data)
+    try:
+        while first is None or time.monotonic() - first < 150:
+            rclpy.spin_once(node, timeout_sec=0.2)
+            if time.monotonic() - last_receive > 10:
+                raise RuntimeError('No IMU data for 10 seconds')
+    finally:
+        with (args.output / 'raw.csv').open('w') as output:
+            writer = csv.writer(output)
+            writer.writerow(['phase', 'elapsed_s', 'sensor_time_s',
+                             'gyro_x_rad_s', 'gyro_y_rad_s', 'gyro_z_rad_s',
+                             'acc_x_g', 'acc_y_g', 'acc_z_g'])
+            writer.writerows(rows)
+        node.destroy_subscription(sub)
+        node.destroy_node()
+        rclpy.shutdown()
+
+    groups = {name: np.array([r[3:] for r in rows if r[0] == name])
+              for name in ('calibration', 'validation')}
+    report = {'pose': args.pose_description, 'acceleration_calibrated': False}
+    for name, values in groups.items():
+        if len(values) < 1000 or not np.isfinite(values).all():
+            raise RuntimeError(f'Insufficient/invalid {name} data: {len(values)}')
+        report[name] = {'samples': len(values), 'mean': values.mean(axis=0).tolist(),
+                        'std': values.std(axis=0, ddof=1).tolist()}
+    train, validation = groups['calibration'], groups['validation']
+    bias = train[:, :3].mean(axis=0)
+    residual = validation[:, :3] - bias
+    report['gyro_bias_rad_s'] = bias.tolist()
+    report['validation_residual_mean_rad_s'] = residual.mean(axis=0).tolist()
+    report['validation_acceleration_norm_g'] = float(np.linalg.norm(validation[:, 3:], axis=1).mean())
+    report['accepted'] = bool(
+        np.max(np.abs(bias)) < 0.05 and
+        all(np.max(group[:, :3].std(axis=0)) < 0.01 and
+            np.max(group[:, 3:].std(axis=0)) < 0.03 for group in groups.values()) and
+        np.max(np.abs(residual.mean(axis=0))) < 0.003 and
+        0.8 < report['validation_acceleration_norm_g'] < 1.2)
+    (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+    if not report['accepted']:
+        raise RuntimeError('Stationarity/held-out validation failed; calibration not accepted')
+    config = {'horizon_imu': {'ros__parameters': {
+        'gyro_bias_rad_s': bias.tolist(),
+        'gyro_variance': train[:, :3].var(axis=0, ddof=1).tolist(),
+        'acceleration_variance': (train[:, 3:] * 9.80665).var(axis=0, ddof=1).tolist(),
+    }}}
+    (args.output / 'horizon_imu.yaml').write_text(yaml.safe_dump(config, sort_keys=False))
+    print(json.dumps(report, indent=2), flush=True)
+
+
+if __name__ == '__main__':
+    main()

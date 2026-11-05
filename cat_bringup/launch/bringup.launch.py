@@ -38,7 +38,7 @@ def generate_launch_description():
         DeclareLaunchArgument('rplidar_mount', default_value='front',
                               choices=['front', 'back', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_front_blind_rear_angle_deg', default_value='90.0'),
-        DeclareLaunchArgument('rplidar_x', default_value='0.03319'),
+        DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
         DeclareLaunchArgument('rplidar_roll', default_value='0'),
@@ -47,7 +47,13 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_motor_tools', default_value='false'),
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
-                              choices=['rplidar', 'vlp16', 'both']),
+                              choices=['rplidar', 'vlp16', 'both', 'horizon']),
+        DeclareLaunchArgument('horizon_config', default_value=PathJoinSubstitution([
+            share, 'config', 'horizon.yaml'])),
+        DeclareLaunchArgument('horizon_user_config', default_value=PathJoinSubstitution([
+            share, 'config', 'horizon.json'])),
+        DeclareLaunchArgument('horizon_imu_calibration', default_value=PathJoinSubstitution([
+            share, 'config', 'horizon_imu.yaml'])),
         DeclareLaunchArgument('vlp16_config', default_value=PathJoinSubstitution([
             share, 'config', 'vlp16.yaml'])),
         DeclareLaunchArgument('vlp16_mount', default_value='back',
@@ -67,6 +73,7 @@ def generate_launch_description():
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
                 Command(['xacro ', model, ' use_zed:=', LaunchConfiguration('use_zed'),
+                         ' rplidar_mount:=', LaunchConfiguration('rplidar_mount'),
                          ' rplidar_x:=', LaunchConfiguration('rplidar_x'),
                          ' rplidar_y:=', LaunchConfiguration('rplidar_y'),
                          ' rplidar_z:=', LaunchConfiguration('rplidar_z'),
@@ -146,6 +153,18 @@ def generate_launch_description():
             launch_arguments={'config': LaunchConfiguration('vlp16_config'),
                               'mount': LaunchConfiguration('vlp16_mount'),
                               'show_rviz': 'false'}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                share, 'launch', 'horizon.launch.py'])),
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
+                LaunchConfiguration('lidar_source'), "' == 'horizon'"])),
+            launch_arguments={
+                'config': LaunchConfiguration('horizon_config'),
+                'user_config': LaunchConfiguration('horizon_user_config'),
+                'imu_calibration': LaunchConfiguration('horizon_imu_calibration'),
+                'show_rviz': 'false',
+            }.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),

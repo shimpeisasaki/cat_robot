@@ -296,6 +296,25 @@ Visualization Manager:
       Value: /velodyne_points
     Use Fixed Frame: true
     Value: true
+  - Alpha: 1
+    Class: rviz_default_plugins/PointCloud2
+    Color Transformer: Intensity
+    Channel Name: intensity
+    Autocompute Intensity Bounds: true
+    Decay Time: 0
+    Enabled: true
+    Name: Horizon points
+    Position Transformer: XYZ
+    Size (Pixels): 2
+    Style: Points
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Value: /livox/lidar
+    Use Fixed Frame: true
+    Value: true
   - Class: rviz_default_plugins/Image
     Enabled: true
     Max Value: 1

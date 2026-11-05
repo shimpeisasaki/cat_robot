@@ -1,0 +1,17 @@
+horizon_driver:
+  ros__parameters:
+    # Livox PointCloud2 with x/y/z/intensity/tag/line. Format 2 is unsupported
+    # by this official driver. Standard PointCloud2 consumers can read x/y/z.
+    xfer_format: 0
+    multi_topic: 0
+    data_src: 0
+    publish_freq: 10.0
+    output_data_type: 0
+    # The official driver fixes its IMU frame to livox_frame; match it here.
+    frame_id: livox_frame
+    cmdline_input_bd_code: ""
+    # Wake on launch; confirm the idle state before closing the SDK.
+    manage_horizon_power: true
+    # This unit restarts after PowerSaving commands (firmware 6.10.0.0).
+    # Standby is verified to stop the laser; motor shutdown is unverified.
+    horizon_idle_mode: standby

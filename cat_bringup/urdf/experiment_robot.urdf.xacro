@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <robot name="experiment_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:arg name="use_zed" default="true"/>
-  <xacro:arg name="rplidar_x" default="0.03319"/>
+  <xacro:arg name="rplidar_mount" default="front"/>
+  <xacro:arg name="rplidar_x" default="0.00319"/>
   <xacro:arg name="rplidar_y" default="0"/>
   <xacro:arg name="rplidar_z" default="0.25435"/>
   <xacro:arg name="rplidar_yaw" default="3.141592653589793"/>
@@ -83,21 +84,25 @@
   <link name="RPLIDAR_F"/>
   <joint name="RPLIDAR_F_joint" type="fixed">
     <parent link="base_link"/><child link="RPLIDAR_F"/>
-    <origin xyz="0.03319 0 0.25435" rpy="0 0 ${pi}"/>
+    <origin xyz="0.00319 0 0.25435" rpy="0 0 ${pi}"/>
   </joint>
+  <!-- Rear mount retained for future use; currently disabled.
   <link name="RPLIDAR_B"/>
   <joint name="RPLIDAR_B_joint" type="fixed">
     <parent link="base_link"/><child link="RPLIDAR_B"/>
     <origin xyz="-0.3095 0 0.49735" rpy="${pi} 0 ${pi/2}"/>
   </joint>
+  -->
+  <xacro:if value="${'$(arg rplidar_mount)' == 'custom'}">
   <link name="RPLIDAR_custom"/>
   <joint name="RPLIDAR_custom_joint" type="fixed">
     <parent link="base_link"/><child link="RPLIDAR_custom"/>
     <origin xyz="$(arg rplidar_x) $(arg rplidar_y) $(arg rplidar_z)"
             rpy="$(arg rplidar_roll) 0 $(arg rplidar_yaw)"/>
   </joint>
+  </xacro:if>
 
-  <!-- VLP-16 front and rear mounting positions. -->
+  <!-- VLP-16 front and rear mounts retained for future use; currently disabled.
   <link name="VLP16_F"/>
   <joint name="VLP16_F_joint" type="fixed">
     <parent link="base_link"/><child link="VLP16_F"/>
@@ -107,6 +112,16 @@
   <joint name="VLP16_B_joint" type="fixed">
     <parent link="base_link"/><child link="VLP16_B"/>
     <origin xyz="-0.347981 0 0.515158" rpy="${(180-20)*pi/180} 0 ${-pi/2}"/>
+  </joint>
+  -->
+
+  <!-- Horizon sensor origin: 270.96 mm behind the axle, centered,
+       435.70 mm above ground. Inverted (roll=pi), forward axis tilted down 15.570 deg.
+       URDF RPY applies roll first, then pitch; inversion leaves +X forward. -->
+  <link name="livox_frame"/>
+  <joint name="horizon_joint" type="fixed">
+    <parent link="base_link"/><child link="livox_frame"/>
+    <origin xyz="-0.27096 0 0.43570" rpy="${pi} ${15.570*pi/180} 0"/>
   </joint>
 
   <!-- Camera mount: 285 mm behind the axle, centered, 550 mm above ground.

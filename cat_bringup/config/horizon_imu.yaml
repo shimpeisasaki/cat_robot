@@ -1,0 +1,17 @@
+# Horizon 3WEDH7600100051; stationary, upside down on desk; 2026-11-03.
+# Raw data and held-out validation: data/horizon_imu/20261103T214614/
+# Gyro bias only; acceleration mean/gravity is not subtracted.
+horizon_imu:
+  ros__parameters:
+    gyro_bias_rad_s:
+    - 0.000799609840137723
+    - -0.00021130390096308973
+    - -5.998218502403885e-05
+    gyro_variance:
+    - 1.2009063712367596e-05
+    - 5.693035074704807e-06
+    - 5.148090081111916e-06
+    acceleration_variance:
+    - 0.0003607741939026446
+    - 0.0003586993034079305
+    - 0.0012793021013751762
