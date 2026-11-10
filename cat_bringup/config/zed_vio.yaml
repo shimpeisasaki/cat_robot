@@ -51,6 +51,8 @@
       map_frame: zed_map
       odometry_frame: zed_odom
       imu_fusion: true
+      two_d_mode: false
+      set_gravity_as_origin: true
       publish_odom_pose: true
       publish_pose_cov: false
       publish_cam_path: false

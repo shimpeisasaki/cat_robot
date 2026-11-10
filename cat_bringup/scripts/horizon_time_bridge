@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Map one unsynchronised sensor clock to ROS time without hiding input gaps.
+
+Raw messages remain on separate topics. A fixed offset is estimated during a
+one-second warmup using the smallest observed host-receive minus sensor time.
+This is an arrival-based approximation, not hardware clock synchronisation.
+Clock resets/jumps latch publication off until this process is restarted.
+"""
+import copy
+import json
+import math
+import time
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from sensor_msgs.msg import Imu, PointCloud2
+from std_msgs.msg import String
+
+
+class SensorClock:
+    def __init__(self, warmup=1.0, max_delay=.5, future_tolerance=.05):
+        if not all(math.isfinite(x) and x > 0 for x in
+                   (warmup, max_delay, future_tolerance)):
+            raise ValueError('Clock limits must be finite and positive')
+        self.warmup_ns = round(warmup * 1e9)
+        self.max_delay_ns = round(max_delay * 1e9)
+        self.future_ns = round(future_tolerance * 1e9)
+        self.offset_ns = None
+        self.estimate_ns = None
+        self.started_ns = None
+        self.clock_pair = None
+        self.last_source = {}
+        self.last_steady = {}
+        self.fault = ''
+        self.reason = 'warming_up'
+
+    def observe(self, stream, source_ns, ros_ns, steady_ns):
+        if self.fault:
+            return None
+        if self.clock_pair is not None:
+            old_ros, old_steady = self.clock_pair
+            if abs((ros_ns - old_ros) - (steady_ns - old_steady)) > 250_000_000:
+                self.fault = 'host_clock_jump; stop and restart the stack'
+                return None
+        self.clock_pair = (ros_ns, steady_ns)
+        if source_ns <= 0 or ros_ns <= 0:
+            self.reason = 'invalid_stamp'
+            return None
+        previous = self.last_source.get(stream)
+        if previous is not None and source_ns <= previous:
+            if previous - source_ns > 500_000_000:
+                self.fault = 'sensor_clock_reset; stop and restart the stack'
+            else:
+                self.reason = 'duplicate_or_reordered'
+            return None
+        if (previous is not None and source_ns - previous -
+                (steady_ns - self.last_steady[stream]) > 500_000_000):
+            self.fault = 'sensor_clock_ahead; stop and restart the stack'
+            return None
+        if self.started_ns is None:
+            self.started_ns = steady_ns
+        if self.offset_ns is None:
+            self.last_source[stream] = source_ns
+            self.last_steady[stream] = steady_ns
+            estimate = ros_ns - source_ns
+            self.estimate_ns = estimate if self.estimate_ns is None else min(
+                self.estimate_ns, estimate)
+            if (steady_ns - self.started_ns < self.warmup_ns or
+                    not {'cloud', 'imu'}.issubset(self.last_source)):
+                return None
+            self.offset_ns = self.estimate_ns
+        stamp = source_ns + self.offset_ns
+        age = ros_ns - stamp
+        if age < -self.future_ns:
+            self.fault = 'sensor_clock_ahead; stop and restart the stack'
+            return None
+        if age > self.max_delay_ns:
+            self.reason = 'delayed_input'
+            return None
+        self.last_source[stream] = source_ns
+        self.last_steady[stream] = steady_ns
+        self.reason = 'mapped'
+        return stamp
+
+
+class HorizonTimeBridge(Node):
+    def __init__(self):
+        super().__init__('horizon_time_bridge')
+        self.mapper = SensorClock(
+            self.declare_parameter('warmup_seconds', 1.).value,
+            self.declare_parameter('max_input_delay_seconds', .5).value,
+            self.declare_parameter('future_tolerance_seconds', .05).value)
+        self.counts = {'cloud': 0, 'imu': 0}
+        self.rejected = {'cloud': 0, 'imu': 0}
+        self.cloud = self.create_publisher(PointCloud2, '/livox/lidar', 1)
+        self.imu = self.create_publisher(Imu, '/livox/imu_raw', 10)
+        self.create_subscription(PointCloud2, '/livox/lidar_sensor_raw',
+                                 lambda msg: self.receive('cloud', msg), qos_profile_sensor_data)
+        self.create_subscription(Imu, '/livox/imu_sensor_raw',
+                                 lambda msg: self.receive('imu', msg), qos_profile_sensor_data)
+        self.status = self.create_publisher(String, '/livox/time_status', QoSProfile(
+            depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.last_state = None
+        self.create_timer(.5, self.report)
+
+    def receive(self, stream, message):
+        if not message.header.frame_id:
+            self.rejected[stream] += 1
+            return
+        source = message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec
+        mapped = self.mapper.observe(stream, source, self.get_clock().now().nanoseconds,
+                                     time.monotonic_ns())
+        if mapped is None:
+            self.rejected[stream] += 1
+            return
+        # A shallow message copy keeps the large immutable cloud payload shared;
+        # only the header is replaced. The raw sensor message is never modified.
+        output = copy.copy(message)
+        output.header = copy.deepcopy(message.header)
+        output.header.stamp.sec, output.header.stamp.nanosec = divmod(mapped, 1_000_000_000)
+        (self.cloud if stream == 'cloud' else self.imu).publish(output)
+        self.counts[stream] += 1
+
+    def report(self):
+        state = 'fault' if self.mapper.fault else (
+            'mapped' if self.mapper.offset_ns is not None else 'warming_up')
+        detail = dict(state=state, mode='host_offset', offset_ns=self.mapper.offset_ns,
+                      reason=self.mapper.fault or self.mapper.reason,
+                      published=self.counts, dropped=self.rejected)
+        self.status.publish(String(data=json.dumps(detail)))
+        if state != self.last_state:
+            if self.mapper.fault:
+                self.get_logger().error(json.dumps(detail))
+            else:
+                self.get_logger().info(json.dumps(detail))
+            self.last_state = state
+
+
+def main():
+    rclpy.init()
+    node = HorizonTimeBridge()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,5 +1,20 @@
 # cat_bringup
 
+実機のground/frontier探索向けに、`horizon.launch.py timestamp_mode:=host_offset` と
+`bringup.launch.py odom_source:=vio odom_pose_mode:=spatial` を追加。
+統合起動は [recovery_explorationの実機手順](../../recovery_exploration/HARDWARE_EXPLORATION.md)。
+既定は従来どおりHorizonのセンサー時刻保持、オドメトリの平面化。
+host_offsetでは元入力を `/livox/lidar_sensor_raw`・`/livox/imu_sensor_raw` に残し、
+点群とIMUへ共通の固定offsetを適用する。1秒の初期化後も時計の飛び・逆行を監視し、
+異常時は再起動まで配信を停止する。受信時刻に基づく近似であり外部時刻同期ではない。
+spatialはZED VIO専用で、高さ・roll/pitchを含むbase姿勢を保持する。
+坂での推定精度は実機未検証。時刻bridge/VIO停止後は機体を止めてstack全体を再起動する。
+
+2026-11-10のオフライン確認：cat_bringupをfocused buildし、`CAT_TEST_HORIZON` を
+unsetしてcolcon testを実施。62件中61件成功、明示opt-inの実機power試験1件はskip。
+模擬点群/IMUで時刻対応と停止ラッチ、模擬ZED/取付TFで高さ・pitchの配信と
+追跡断後の停止を確認した。ハードウェア・シミュレータ・RVizは起動していない。
+
 機体起動・設定・TF・センサ・停止制御の所有元です。
 起動方法、設定一覧、公開トピックは[リポジトリREADME](../README.md)を参照してください。
 

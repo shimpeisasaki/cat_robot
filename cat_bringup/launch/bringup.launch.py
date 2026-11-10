@@ -32,6 +32,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
+        DeclareLaunchArgument('odom_pose_mode', default_value='planar', choices=['planar', 'spatial']),
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
@@ -89,7 +90,8 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'odometry.launch.py'])),
-            launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items(),
+            launch_arguments={'odom_source': LaunchConfiguration('odom_source'),
+                              'odom_pose_mode': LaunchConfiguration('odom_pose_mode')}.items(),
             condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              parameters=[{'autorepeat_rate': 20.0, 'deadzone': 0.05}],

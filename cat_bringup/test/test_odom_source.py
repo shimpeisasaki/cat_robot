@@ -21,7 +21,7 @@ def subject(source):
     # T_camera_base, camera 0.27m behind and 0.56m above base.
     tf.transform.translation.x = .27
     tf.transform.translation.z = -.56
-    obj = NS(source=source, failed=False, origin=None, previous=None, last_stamp=None,
+    obj = NS(source=source, pose_mode='planar', failed=False, origin=None, previous=None, last_stamp=None,
              input_frames=None, vio_jump_since=None, vio_jump_grace=.5,
              pub=Mock(), tf=Mock(), buffer=Mock(), get_logger=Mock(),
              get_clock=lambda: NS(now=lambda: NS(nanoseconds=10_000_000_000)))
@@ -140,3 +140,84 @@ def test_starting_heading_normalized():
     t[:3, :3] = Rotation.from_euler('z', 1.2).as_matrix()
     t[:3, 3] = [2., 3., .5]
     assert np.allclose(impl.origin_for(t)@t, np.eye(4))
+
+
+def spatial_message(obj, base, stamp):
+    mounting = obj.buffer.lookup_transform.return_value.transform
+    camera = base @ np.linalg.inv(impl.matrix(mounting.translation, mounting.rotation))
+    msg = message(stamp)
+    for axis, value in zip(('x', 'y', 'z'), camera[:3, 3]):
+        setattr(msg.pose.pose.position, axis, float(value))
+    for axis, value in zip(('x', 'y', 'z', 'w'), Rotation.from_matrix(camera[:3, :3]).as_quat()):
+        setattr(msg.pose.pose.orientation, axis, float(value))
+    return msg
+
+
+def test_spatial_vio_preserves_slope_height_and_attitude_in_single_tf():
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    base = np.eye(4)
+    base[:3, :3] = Rotation.from_euler('xyz', [.05, -.12, .7]).as_matrix()
+    base[:3, 3] = [2., 3., .2]
+    origin = impl.origin_for(base)
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 9.9))
+    base[:3, 3] += [.01, .01, .005]
+    base[:3, :3] = base[:3, :3] @ Rotation.from_euler('y', -.01).as_matrix()
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 10.))
+    out = obj.pub.publish.call_args.args[0]
+    actual = impl.matrix(out.pose.pose.position, out.pose.pose.orientation)
+    assert np.allclose(actual, origin @ base)
+    assert np.isclose(out.pose.pose.position.z, .005)
+    assert abs(out.pose.pose.orientation.x) > .01
+    assert abs(out.pose.pose.orientation.y) > .01
+    tf = obj.tf.sendTransform.call_args.args[0]
+    assert np.allclose(impl.matrix(tf.transform.translation, tf.transform.rotation), actual)
+    assert obj.tf.sendTransform.call_count == 2
+    assert np.all(np.diag(np.array(out.pose.covariance).reshape(6, 6)) < 1e6)
+
+
+def test_spatial_velocity_uses_body_frame_and_pitch_rate():
+    previous = np.eye(4)
+    current = np.eye(4)
+    current[:3, :3] = Rotation.from_euler('y', -.1).as_matrix()
+    current[:3, 3] = current[:3, :3] @ [.02, 0., 0.]
+    speed = impl.spatial_velocity(previous, current, .1)
+    assert np.allclose(speed[:3], [.2, 0., 0.])
+    assert np.allclose(speed[3:], [0., -1., 0.])
+
+
+def test_spatial_camera_lever_arm_during_pitch_does_not_translate_base():
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    base = np.eye(4)
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 9.9))
+    base[:3, :3] = Rotation.from_euler('y', .05).as_matrix()
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 10.))
+    out = obj.pub.publish.call_args.args[0]
+    p = out.pose.pose.position
+    assert np.allclose([p.x, p.y, p.z], 0.)
+    v = out.twist.twist.linear
+    assert np.allclose([v.x, v.y, v.z], 0.)
+    assert np.isclose(out.twist.twist.angular.y, .5)
+
+
+def test_spatial_vertical_jump_is_dropped_and_gap_latches_off():
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    base = np.eye(4)
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 9.5))
+    base[2, 3] = 5.
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 9.51))
+    assert not obj.failed and obj.pub.publish.call_count == 1
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 10.01))
+    assert obj.failed and obj.pub.publish.call_count == 1
+
+
+def test_spatial_roll_jump_is_rejected_even_when_yaw_is_unchanged():
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    base = np.eye(4)
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 9.9))
+    base[:3, :3] = Rotation.from_euler('x', 1.).as_matrix()
+    impl.OdomSource.receive(obj, spatial_message(obj, base, 10.))
+    assert obj.pub.publish.call_count == 1

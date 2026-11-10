@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Select one odometry source at startup. Never switch sources while moving.
 
-VIO camera poses are converted to planar base poses before publication.
+VIO camera poses are converted to base poses; planar remains the default.
+The explicit spatial mode retains gravity-aligned height, roll and pitch.
 VIO velocity is derived from successive transformed poses: the ZED twist
 covariance may be zero and its reference point is the camera, not the base.
 After a tracking gap/jump the output is latched off until this node restarts.
@@ -50,12 +51,23 @@ def velocity(previous, current, dt):
     return np.array([c*delta[0]+s*delta[1], -s*delta[0]+c*delta[1], delta[2]])/dt
 
 
+def spatial_velocity(previous, current, dt):
+    linear = current[:3, :3].T @ (current[:3, 3] - previous[:3, 3]) / dt
+    angular = Rotation.from_matrix(previous[:3, :3].T @ current[:3, :3]).as_rotvec() / dt
+    return np.r_[linear, angular]
+
+
 class OdomSource(Node):
     def __init__(self):
         super().__init__('odom_source')
         self.source = self.declare_parameter('source', 'vio').value
         if self.source not in ('vio', 'wheel'):
             raise ValueError('source must be vio or wheel')
+        self.pose_mode = self.declare_parameter('pose_mode', 'planar').value
+        if self.pose_mode not in ('planar', 'spatial'):
+            raise ValueError('pose_mode must be planar or spatial')
+        if self.pose_mode == 'spatial' and self.source != 'vio':
+            raise ValueError('spatial pose requires VIO; wheel EKF is planar')
         self.pub = self.create_publisher(Odometry, '/odom', 10)
         self.tf = TransformBroadcaster(self)
         self.buffer = Buffer()
@@ -118,18 +130,22 @@ class OdomSource(Node):
                 return
             if self.origin is None:
                 self.origin = origin_for(base)
-            pose = planar(self.origin @ base)
-            v = np.zeros(3)
+            spatial = self.pose_mode == 'spatial'
+            transformed = self.origin @ base
+            pose = transformed if spatial else planar(transformed)
+            v = np.zeros(6 if spatial else 3)
             if self.previous is not None:
                 dt = stamp-self.last_stamp
-                v = velocity(self.previous, pose, dt)
-                if np.linalg.norm(v[:2]) > 2.5 or abs(v[2]) > 5.:
+                v = (spatial_velocity if spatial else velocity)(self.previous, pose, dt)
+                linear_speed = np.linalg.norm(v[:3] if spatial else v[:2])
+                angular_speed = np.linalg.norm(v[3:]) if spatial else abs(v[2])
+                if linear_speed > 2.5 or angular_speed > 5.:
                     if self.vio_jump_since is None:
                         self.vio_jump_since = stamp
                     elapsed = stamp-self.vio_jump_since
                     detail = (f'Implausible VIO pose jump for {elapsed:.3f}s: '
-                              f'dt={dt:.4f}s linear={np.linalg.norm(v[:2]):.3f}m/s '
-                              f'angular={abs(v[2]):.3f}rad/s')
+                              f'dt={dt:.4f}s linear={linear_speed:.3f}m/s '
+                              f'angular={angular_speed:.3f}rad/s')
                     if elapsed >= self.vio_jump_grace:
                         self.fail(detail)
                     else:
@@ -137,16 +153,26 @@ class OdomSource(Node):
                                                   throttle_duration_sec=.25)
                     return
                 self.vio_jump_since = None
-            out.pose.pose.position.x = float(pose[0])
-            out.pose.pose.position.y = float(pose[1])
-            out.pose.pose.position.z = 0.
-            out.pose.pose.orientation.x = out.pose.pose.orientation.y = 0.
-            out.pose.pose.orientation.z = math.sin(pose[2]/2)
-            out.pose.pose.orientation.w = math.cos(pose[2]/2)
-            out.twist.twist.linear.x, out.twist.twist.linear.y = float(v[0]), float(v[1])
-            out.twist.twist.linear.z = 0.
-            out.twist.twist.angular.x = out.twist.twist.angular.y = 0.
-            out.twist.twist.angular.z = float(v[2])
+            if spatial:
+                for axis, value in zip(('x', 'y', 'z'), pose[:3, 3]):
+                    setattr(out.pose.pose.position, axis, float(value))
+                for axis, value in zip(('x', 'y', 'z', 'w'),
+                                       Rotation.from_matrix(pose[:3, :3]).as_quat()):
+                    setattr(out.pose.pose.orientation, axis, float(value))
+                for axis, linear, angular in zip(('x', 'y', 'z'), v[:3], v[3:]):
+                    setattr(out.twist.twist.linear, axis, float(linear))
+                    setattr(out.twist.twist.angular, axis, float(angular))
+            else:
+                out.pose.pose.position.x = float(pose[0])
+                out.pose.pose.position.y = float(pose[1])
+                out.pose.pose.position.z = 0.
+                out.pose.pose.orientation.x = out.pose.pose.orientation.y = 0.
+                out.pose.pose.orientation.z = math.sin(pose[2]/2)
+                out.pose.pose.orientation.w = math.cos(pose[2]/2)
+                out.twist.twist.linear.x, out.twist.twist.linear.y = float(v[0]), float(v[1])
+                out.twist.twist.linear.z = 0.
+                out.twist.twist.angular.x = out.twist.twist.angular.y = 0.
+                out.twist.twist.angular.z = float(v[2])
             # Conservative diagonal uncertainty after lever-arm/planar conversion.
             cov = np.asarray(msg.pose.covariance).reshape(6, 6)
             if not np.all(np.isfinite(cov)) or np.any(np.diag(cov) < 0):
@@ -154,10 +180,13 @@ class OdomSource(Node):
             angle_var = max(.0001, float(np.trace(cov[3:, 3:])))
             pos_var = max(.0001, 2*float(np.trace(cov[:3, :3])) +
                           2*np.linalg.norm(extrinsic[:3, 3])**2*angle_var)
-            out.pose.covariance = np.diag([pos_var, pos_var, 1e6, 1e6, 1e6, angle_var]).ravel().tolist()
+            pose_variances = ([pos_var]*3 + [angle_var]*3 if spatial else
+                              [pos_var, pos_var, 1e6, 1e6, 1e6, angle_var])
+            out.pose.covariance = np.diag(pose_variances).ravel().tolist()
             dt = stamp-self.last_stamp if self.last_stamp is not None else .01
-            out.twist.covariance = np.diag([2*pos_var/dt**2]*2+[1e6]*3+
-                                          [2*angle_var/dt**2]).ravel().tolist()
+            twist_variances = ([2*pos_var/dt**2]*3 + [2*angle_var/dt**2]*3 if spatial else
+                               [2*pos_var/dt**2]*2+[1e6]*3+[2*angle_var/dt**2])
+            out.twist.covariance = np.diag(twist_variances).ravel().tolist()
             self.previous = pose
         self.last_stamp = stamp
         self.input_frames = frames
