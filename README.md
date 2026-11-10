@@ -56,7 +56,9 @@ ros2 launch cat_bringup bringup.launch.py
 | `use_base`, `use_lidar`, `use_zed` | `true` | 駆動部、LiDAR、ZEDの有効化 |
 | `lidar_source` | `rplidar` | `rplidar`、`vlp16`、`both` から起動するLiDARを選択 |
 | `odom_source` | `vio` | `vio` または `wheel`。`wheel` は車輪・IMUの推定値を使用 |
-| `use_gnss` | `false` | GNSSの有効化 |
+| `gnss_mode` | `off` | `off`：無効、`standalone`：単独測位、`rtk`：選択した基準局でRTK（既定は大学CIT） |
+| `rtk_source` | `cit` | `cit`：大学内、`matsudo`：公開松戸局 |
+| `use_gnss` | `false` | 従来互換。`true`で単独測位。明示した`gnss_mode`を優先 |
 | `serial_port` | `/dev/rplidar` | RPLIDARのシリアルポート |
 | `rplidar_mount` | `front` | 現在位置 `RPLIDAR_F`。`back` は後方の `RPLIDAR_B`。`legacy` は `front` の別名。`custom` は `rplidar_x/y/z/roll/yaw`（m、rad） |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
@@ -64,7 +66,7 @@ ros2 launch cat_bringup bringup.launch.py
 | `enable_panorama` | `true` | 24方向のRGB画像を保存する撮影アクション。画像合成は行わない |
 | `robot_config` | パッケージ内の `robot.yaml` | 機体設定ファイル |
 
-ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。ZEDとGNSSを使う構成には、それぞれのROSパッケージが必要である。GNSSを使用する場合は `use_gnss:=true` と必要に応じて `gnss_serial:=...` を指定する。GNSSデータのNav2への融合は、この起動には含まれない。
+ZEDを使わない構成では、`use_zed:=false odom_source:=wheel` を指定する。ZEDとGNSSを使う構成には、それぞれのROSパッケージが必要である。GNSSは `gnss_mode:=standalone`、大学CITを使うRTKは **`gnss_mode:=rtk` の一設定**で有効にする。RTKはNTRIPクライアントと受信機への補正入力もまとめて起動する。松戸局へ切り替える場合は `rtk_source:=matsudo` を追加する。大学の認証情報はGit管理外の `~/.config/ublox_dgnss/ntrip_cit.json` から読む。必要に応じて `gnss_serial:=...` を指定する。`mapping.launch.py`・`navigation.launch.py`からも同じ引数を使える。インターネット接続が必要で、RTK Fixは実機未確認。GNSSデータのNav2への融合は、この起動には含まれない。
 
 ### VLP-16
 

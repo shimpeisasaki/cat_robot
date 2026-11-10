@@ -18,6 +18,24 @@ unsetしてcolcon testを実施。62件中61件成功、明示opt-inの実機pow
 機体起動・設定・TF・センサ・停止制御の所有元です。
 起動方法、設定一覧、公開トピックは[リポジトリREADME](../README.md)を参照してください。
 
+## GNSS・RTK基準局の切り替え
+
+既存の起動コマンドに **`gnss_mode:=rtk`** を指定すると、受信機と大学CIT局の
+NTRIPクライアントをまとめて起動する。既定は `rtk_source:=cit`、接続先は `taroz.net:2101/CIT`。
+認証はGit管理外の `~/.config/ublox_dgnss/ntrip_cit.json`（所有者だけ読み書き可能）から読む。
+公開松戸局は `rtk_source:=matsudo` で選択できる。接続先は `geortk.jp:2101/Matsudo`、認証は不要。
+通常の単独測位は `gnss_mode:=standalone`、GNSS無効は `gnss_mode:=off`。
+同じ引数を `cat_navigation` のmapping/navigation launchにも指定できる。
+既定は `off`。従来の `use_gnss:=true` は単独測位として有効で、
+`gnss_mode` を明示した場合はそちらを優先する。切り替えはlaunchの再起動時に適用する。
+
+GNSS有効時の測位周期は5 Hz、衛星選別条件は受信機の保存値を使う。
+RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では無効にする。
+既存の `/gnss/fix`・`/gnss/fix_velocity` と `gnss_antenna_link` を使用する。
+大学・松戸の各局からの補正受信とオフラインの起動構成は確認済み。
+正常受信中は接続を保持し、切断時は30秒から最大300秒へ間隔を延ばして再接続する。
+RTKの実機起動・Fix・精度は未確認で、GNSSをNav2へ融合する処理も含まない。
+
 現在のURDFでは、未使用の `VLP16_F`・`VLP16_B`・`RPLIDAR_B` を
 コメントアウトして保存しています。これらの取付TFが必要になったら復帰してください。
 `RPLIDAR_custom` は `rplidar_mount:=custom` のときだけ生成します。

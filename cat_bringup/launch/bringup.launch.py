@@ -34,6 +34,11 @@ def generate_launch_description():
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
         DeclareLaunchArgument('odom_pose_mode', default_value='planar', choices=['planar', 'spatial']),
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
+            "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
+            choices=['off', 'standalone', 'rtk'],
+            description='GNSS mode; rtk uses the selected correction source (CIT by default)'),
+        DeclareLaunchArgument('rtk_source', default_value='cit', choices=['cit', 'matsudo']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
@@ -169,9 +174,13 @@ def generate_launch_description():
             }.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),
-            condition=IfCondition(LaunchConfiguration('use_gnss')),
-            launch_arguments={'frame_id': 'gnss_antenna_link',
+                FindPackageShare('ublox_dgnss'), 'launch', PythonExpression([
+                    "'gnss_rtk.launch.py' if '", LaunchConfiguration('gnss_mode'),
+                    "' == 'rtk' else 'gnss_launch_compatible.launch.py'"])])),
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration('gnss_mode'), "' != 'off'"])),
+            launch_arguments={'rtk_source': LaunchConfiguration('rtk_source'),
+                              'frame_id': 'gnss_antenna_link',
                               'device_serial_string': LaunchConfiguration('gnss_serial')}.items()),
         Node(package='rviz2', executable='rviz2', output='screen',
              arguments=['-d', PathJoinSubstitution([
