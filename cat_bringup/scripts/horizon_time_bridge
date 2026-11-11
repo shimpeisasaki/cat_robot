@@ -4,7 +4,8 @@
 Raw messages remain on separate topics. A fixed offset is estimated during a
 one-second warmup using the smallest observed host-receive minus sensor time.
 This is an arrival-based approximation, not hardware clock synchronisation.
-Clock resets/jumps latch publication off until this process is restarted.
+Startup sensor jumps restart warmup before any output. After calibration,
+clock resets/jumps latch publication off until this process is restarted.
 """
 import copy
 import json
@@ -34,6 +35,21 @@ class SensorClock:
         self.last_steady = {}
         self.fault = ''
         self.reason = 'warming_up'
+        self.warmup_resets = 0
+
+    def sensor_jump(self, reason, stream, source_ns, ros_ns, steady_ns):
+        if self.offset_ns is not None:
+            self.fault = reason + '; stop and restart the stack'
+            return
+        # The SDK may drain old packets when sampling starts. Nothing has been
+        # published yet, so discard this tentative epoch and require another
+        # full stable warmup with BOTH streams. Never reanchor a live epoch.
+        self.warmup_resets += 1
+        self.started_ns = steady_ns
+        self.estimate_ns = ros_ns - source_ns
+        self.last_source = {stream: source_ns}
+        self.last_steady = {stream: steady_ns}
+        self.reason = 'warming_up_after_' + reason
 
     def observe(self, stream, source_ns, ros_ns, steady_ns):
         if self.fault:
@@ -50,13 +66,13 @@ class SensorClock:
         previous = self.last_source.get(stream)
         if previous is not None and source_ns <= previous:
             if previous - source_ns > 500_000_000:
-                self.fault = 'sensor_clock_reset; stop and restart the stack'
+                self.sensor_jump('sensor_clock_reset', stream, source_ns, ros_ns, steady_ns)
             else:
                 self.reason = 'duplicate_or_reordered'
             return None
         if (previous is not None and source_ns - previous -
                 (steady_ns - self.last_steady[stream]) > 500_000_000):
-            self.fault = 'sensor_clock_ahead; stop and restart the stack'
+            self.sensor_jump('sensor_clock_ahead', stream, source_ns, ros_ns, steady_ns)
             return None
         if self.started_ns is None:
             self.started_ns = steady_ns
@@ -67,7 +83,9 @@ class SensorClock:
             self.estimate_ns = estimate if self.estimate_ns is None else min(
                 self.estimate_ns, estimate)
             if (steady_ns - self.started_ns < self.warmup_ns or
-                    not {'cloud', 'imu'}.issubset(self.last_source)):
+                    not {'cloud', 'imu'}.issubset(self.last_source) or
+                    any(steady_ns-self.last_steady[k] > self.max_delay_ns
+                        for k in ('cloud', 'imu'))):
                 return None
             self.offset_ns = self.estimate_ns
         stamp = source_ns + self.offset_ns
@@ -127,6 +145,7 @@ class HorizonTimeBridge(Node):
             'mapped' if self.mapper.offset_ns is not None else 'warming_up')
         detail = dict(state=state, mode='host_offset', offset_ns=self.mapper.offset_ns,
                       reason=self.mapper.fault or self.mapper.reason,
+                      warmup_resets=self.mapper.warmup_resets,
                       published=self.counts, dropped=self.rejected)
         self.status.publish(String(data=json.dumps(detail)))
         if state != self.last_state:

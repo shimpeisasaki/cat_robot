@@ -22,6 +22,7 @@ def ready():
     clock = impl.SensorClock()
     assert sample(clock, 'cloud', 100., 1000.1) is None
     assert sample(clock, 'imu', 100.1, 1000.11) is None
+    assert sample(clock, 'cloud', 101., 1001.1) is None
     assert sample(clock, 'imu', 101.1, 1001.11) == round(1001.11*N)
     return clock
 
@@ -29,10 +30,10 @@ def ready():
 def test_shared_minimum_delay_offset_preserves_relative_acquisition_time():
     clock = ready()
     assert clock.offset_ns == round(900.01*N)
-    cloud = sample(clock, 'cloud', 101., 1001.12)
-    imu = sample(clock, 'imu', 101.12, 1001.13)
+    cloud = sample(clock, 'cloud', 101.11, 1001.22)
+    imu = sample(clock, 'imu', 101.23, 1001.24)
     assert imu - cloud == round(.12*N)
-    assert cloud == round(1001.01*N)  # Not rewritten to its arrival time.
+    assert cloud == round(1001.12*N)  # Not rewritten to its arrival time.
 
 
 def test_warmup_requires_both_streams_and_does_not_replay_buffered_data():
@@ -46,9 +47,9 @@ def test_warmup_requires_both_streams_and_does_not_replay_buffered_data():
 def test_delayed_input_is_dropped_without_reanchoring_then_fresh_input_recovers():
     clock = ready()
     offset = clock.offset_ns
-    assert sample(clock, 'cloud', 100.2, 1001.2) is None
+    assert sample(clock, 'cloud', 101.1, 1001.8) is None
     assert clock.reason == 'delayed_input'
-    assert sample(clock, 'cloud', 101.21, 1001.22) is not None
+    assert sample(clock, 'cloud', 101.9, 1001.91) is not None
     assert clock.offset_ns == offset
 
 
@@ -84,7 +85,22 @@ def test_sensor_jump_during_warmup_cannot_be_hidden_by_a_new_offset():
     clock = impl.SensorClock()
     assert sample(clock, 'imu', 100., 1000.) is None
     assert sample(clock, 'imu', 110., 1000.1) is None
-    assert clock.fault and clock.offset_ns is None
+    assert not clock.fault and clock.offset_ns is None
+    assert clock.warmup_resets == 1
+    assert sample(clock, 'cloud', 110.1, 1000.2) is None
+    assert sample(clock, 'cloud', 111.15, 1001.25) is None  # IMU still stale.
+    assert sample(clock, 'imu', 111.2, 1001.3) == round(1001.3*N)
+    assert clock.offset_ns == round(890.1*N)
+
+
+def test_sensor_reset_during_warmup_discards_the_old_epoch():
+    clock = impl.SensorClock()
+    assert sample(clock, 'cloud', 100., 1000.) is None
+    assert sample(clock, 'imu', 100., 1000.01) is None
+    assert sample(clock, 'cloud', 1., 1000.1) is None
+    assert not clock.fault and clock.offset_ns is None
+    assert clock.last_source == {'cloud': 1_000_000_000}
+    assert clock.warmup_resets == 1
 
 
 @pytest.mark.parametrize('source', [0, -1])
