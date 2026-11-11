@@ -6,8 +6,9 @@ import os
 import time
 
 import numpy as np
+import pytest
 import rclpy
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.time import Time
 from scipy.spatial.transform import Rotation
@@ -20,13 +21,14 @@ impl = importlib.util.module_from_spec(spec)
 loader.exec_module(impl)
 
 
-def test_spatial_vio_publishes_height_pitch_and_latches_after_tracking_gap():
+@pytest.mark.parametrize('initial_pitch_deg', [-5., 0., 5.])
+def test_spatial_vio_publishes_height_pitch_and_latches_after_tracking_gap(initial_pitch_deg):
     assert os.environ['ROS_DOMAIN_ID'] == '212'
     assert os.environ['ROS_LOCALHOST_ONLY'] == '1'
     rclpy.init(args=['--ros-args', '-p', 'source:=vio', '-p', 'pose_mode:=spatial'])
     odometry = impl.OdomSource()
     peer = rclpy.create_node('synthetic_spatial_zed')
-    publisher = peer.create_publisher(Odometry, '/zed/zed_node/odom', 10)
+    publisher = peer.create_publisher(PoseWithCovarianceStamped, '/zed/zed_node/pose_with_covariance', 10)
     outputs = []
     subscription = peer.create_subscription(Odometry, '/odom', outputs.append, 10)
     buffer = Buffer()
@@ -47,10 +49,10 @@ def test_spatial_vio_publishes_height_pitch_and_latches_after_tracking_gap():
     def send(progress):
         base = np.eye(4)
         base[:3, 3] = [2.+.2*progress, 3., .3+.03*progress]
-        base[:3, :3] = Rotation.from_euler('y', np.deg2rad(-5.*progress)).as_matrix()
+        base[:3, :3] = Rotation.from_euler('y', np.deg2rad(initial_pitch_deg-5.*progress)).as_matrix()
         camera = base @ mount
-        message = Odometry()
-        message.header.frame_id, message.child_frame_id = 'zed_odom', 'zed_camera_link'
+        message = PoseWithCovarianceStamped()
+        message.header.frame_id = 'zed_map'
         message.header.stamp = peer.get_clock().now().to_msg()
         for axis, value in zip(('x', 'y', 'z'), camera[:3, 3]):
             setattr(message.pose.pose.position, axis, float(value))
@@ -72,7 +74,7 @@ def test_spatial_vio_publishes_height_pitch_and_latches_after_tracking_gap():
             send(0.)
             poll()
         assert outputs, (odometry.source, odometry.pose_mode, odometry.last_stamp,
-                         odometry.count_subscribers('/zed/zed_node/odom'),
+                         odometry.count_subscribers('/zed/zed_node/pose_with_covariance'),
                          odometry.buffer.all_frames_as_yaml())
         start = time.monotonic()
         while time.monotonic()-start < 1.5:
@@ -83,7 +85,7 @@ def test_spatial_vio_publishes_height_pitch_and_latches_after_tracking_gap():
         p, q = out.pose.pose.position, out.pose.pose.orientation
         assert np.allclose([p.x, p.y, p.z], [.2, 0., .03], atol=.001)
         assert np.allclose(Rotation.from_quat([q.x, q.y, q.z, q.w]).as_euler('xyz'),
-                           [0., np.deg2rad(-5.), 0.], atol=.001)
+                           [0., np.deg2rad(initial_pitch_deg-5.), 0.], atol=.001)
         tf = buffer.lookup_transform('odom', 'base_link', Time()).transform
         assert np.allclose([tf.translation.x, tf.translation.y, tf.translation.z],
                            [.2, 0., .03], atol=.001)

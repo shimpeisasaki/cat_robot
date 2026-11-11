@@ -7,7 +7,15 @@
 host_offsetでは元入力を `/livox/lidar_sensor_raw`・`/livox/imu_sensor_raw` に残し、
 点群とIMUへ共通の固定offsetを適用する。1秒の初期化後も時計の飛び・逆行を監視し、
 配信開始後の異常時は再起動まで配信を停止する。受信時刻に基づく近似であり外部時刻同期ではない。
-spatialはZED VIO専用で、高さ・roll/pitchを含むbase姿勢を保持する。
+spatialはZED VIO専用で、SDKの重力基準WORLD姿勢
+`/zed/zed_node/pose_with_covariance` を使う。カメラ相対の `/zed/zed_node/odom` は
+spatial入力に使わない。取付TFでbaseへ変換し、初期の並進・yawだけを原点化する。
+起動時からroll/pitchを保持するため、水平床での開始は必要ない。
+`zed_vio.yaml` はIMU融合・重力基準を有効、2D化・area memory・wrapper TF配信を無効にする。
+WORLD poseの共分散配信を有効にし、速度は変換後base姿勢の差分から求める。
+2026-11-11、カメラ相対odomを重力基準と扱い平地を12度の坂と誤判定する不具合を修正した。
+校正済みHorizonの取付TFと地面判定しきい値は変更していない。
+ZEDの実取付ずれの測定は別作業で、校正テストは `robot_sensor_tests` に置く。
 坂での推定精度は実機未検証。時刻bridge/VIO停止後は機体を止めてstack全体を再起動する。
 
 2026-11-10のオフライン確認：cat_bringupをfocused buildし、`CAT_TEST_HORIZON` を

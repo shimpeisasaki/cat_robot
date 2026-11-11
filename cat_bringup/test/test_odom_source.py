@@ -5,9 +5,10 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 import numpy as np
+import pytest
 from scipy.spatial.transform import Rotation
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
 
 loader = SourceFileLoader('odom_source_impl', str(Path(__file__).parents[1]/'scripts/odom_source'))
 spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -26,6 +27,7 @@ def subject(source):
              pub=Mock(), tf=Mock(), buffer=Mock(), get_logger=Mock(),
              get_clock=lambda: NS(now=lambda: NS(nanoseconds=10_000_000_000)))
     obj.buffer.lookup_transform.return_value = tf
+    obj.receive = lambda msg: impl.OdomSource.receive(obj, msg)
     obj.fail = lambda reason: impl.OdomSource.fail(obj, reason)
     return obj
 
@@ -146,6 +148,7 @@ def spatial_message(obj, base, stamp):
     mounting = obj.buffer.lookup_transform.return_value.transform
     camera = base @ np.linalg.inv(impl.matrix(mounting.translation, mounting.rotation))
     msg = message(stamp)
+    msg.header.frame_id = 'zed_map'
     for axis, value in zip(('x', 'y', 'z'), camera[:3, 3]):
         setattr(msg.pose.pose.position, axis, float(value))
     for axis, value in zip(('x', 'y', 'z', 'w'), Rotation.from_matrix(camera[:3, :3]).as_quat()):
@@ -162,14 +165,14 @@ def test_spatial_vio_preserves_slope_height_and_attitude_in_single_tf():
     origin = impl.origin_for(base)
     impl.OdomSource.receive(obj, spatial_message(obj, base, 9.9))
     base[:3, 3] += [.01, .01, .005]
-    base[:3, :3] = base[:3, :3] @ Rotation.from_euler('y', -.01).as_matrix()
+    base[:3, :3] = base[:3, :3] @ Rotation.from_euler('xyz', [.02, -.01, 0.]).as_matrix()
     impl.OdomSource.receive(obj, spatial_message(obj, base, 10.))
     out = obj.pub.publish.call_args.args[0]
     actual = impl.matrix(out.pose.pose.position, out.pose.pose.orientation)
     assert np.allclose(actual, origin @ base)
     assert np.isclose(out.pose.pose.position.z, .005)
-    assert abs(out.pose.pose.orientation.x) > .01
-    assert abs(out.pose.pose.orientation.y) > .01
+    assert abs(out.pose.pose.orientation.x) > .001
+    assert abs(out.pose.pose.orientation.y) > .001
     tf = obj.tf.sendTransform.call_args.args[0]
     assert np.allclose(impl.matrix(tf.transform.translation, tf.transform.rotation), actual)
     assert obj.tf.sendTransform.call_count == 2
@@ -221,3 +224,51 @@ def test_spatial_roll_jump_is_rejected_even_when_yaw_is_unchanged():
     base[:3, :3] = Rotation.from_euler('x', 1.).as_matrix()
     impl.OdomSource.receive(obj, spatial_message(obj, base, 10.))
     assert obj.pub.publish.call_count == 1
+
+
+@pytest.mark.parametrize('mount_pitch', [0., 10., 12., 15.])
+@pytest.mark.parametrize('initial_pitch', [-5., 0., 5.])
+def test_world_pose_preserves_initial_slope_and_removes_camera_mount(mount_pitch, initial_pitch):
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    mount = np.eye(4)
+    mount[:3, :3] = Rotation.from_euler('y', np.deg2rad(mount_pitch)).as_matrix()
+    mount[:3, 3] = [-.285, 0., .55]
+    inverse = np.linalg.inv(mount)
+    tf = obj.buffer.lookup_transform.return_value.transform
+    for axis, value in zip(('x', 'y', 'z'), inverse[:3, 3]):
+        setattr(tf.translation, axis, float(value))
+    for axis, value in zip(('x', 'y', 'z', 'w'), Rotation.from_matrix(inverse[:3, :3]).as_quat()):
+        setattr(tf.rotation, axis, float(value))
+    body = np.eye(4)
+    body[:3, :3] = Rotation.from_euler('xyz', [.02, np.deg2rad(initial_pitch), .7]).as_matrix()
+    body[:3, 3] = [2., 3., .5]
+    origin = impl.origin_for(body)
+    for stamp in [9.9, 10.]:
+        raw = spatial_message(obj, body, stamp)
+        pose = PoseWithCovarianceStamped(header=raw.header, pose=raw.pose)
+        impl.OdomSource.receive_pose(obj, pose)
+        out = obj.pub.publish.call_args.args[0]
+        assert np.allclose(impl.matrix(out.pose.pose.position, out.pose.pose.orientation), origin @ body)
+        body[:3, 3] += [.01, 0., .005]
+        body[:3, :3] = body[:3, :3] @ Rotation.from_euler('y', -.01).as_matrix()
+
+
+def test_spatial_mode_rejects_camera_relative_odometry():
+    obj = subject('vio')
+    obj.pose_mode = 'spatial'
+    impl.OdomSource.receive(obj, message())
+    assert obj.pub.publish.call_count == 0
+    assert obj.origin is None
+
+
+def test_spatial_profile_uses_gravity_world_pose_without_loop_closure():
+    import yaml
+    config = yaml.safe_load((Path(__file__).parents[1]/'config/zed_vio.yaml').read_text())
+    settings = config['/**']['ros__parameters']['pos_tracking']
+    assert settings['set_gravity_as_origin']
+    assert settings['imu_fusion']
+    assert settings['publish_odom_pose'] and settings['publish_pose_cov']
+    assert not settings['two_d_mode']
+    assert not settings['area_memory']
+    assert not settings['publish_tf'] and not settings['publish_map_tf']

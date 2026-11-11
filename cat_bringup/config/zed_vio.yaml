@@ -54,7 +54,8 @@
       two_d_mode: false
       set_gravity_as_origin: true
       publish_odom_pose: true
-      publish_pose_cov: false
+      # Spatial adapter consumes this gravity-aligned WORLD pose.
+      publish_pose_cov: true
       publish_cam_path: false
       publish_tf: false
       publish_map_tf: false
