@@ -1,10 +1,11 @@
 sector_scan_filter:
   ros__parameters:
-    # Defaults match base_link -> RPLIDAR_B; launch overrides for selected mount.
-    mounting_roll: 3.141592653589793
-    mounting_yaw: 1.5707963267948966
+    # Defaults match base_link -> RPLIDAR_F; launch overrides for custom mounts.
+    scan_frame: RPLIDAR_F
+    mounting_roll: 0.0
+    mounting_yaw: 3.141592653589793
     front_angle_deg: 270.0
-    # B and custom: 0.2 m all around. The RPLIDAR_F launch overrides the rear
-    # 90 degrees to 0.6 m. Distances are measured from the LiDAR origin.
+    # Distances are measured from the LiDAR origin. Custom uses 0.2 m all around.
     front_min_range: 0.2
-    rear_min_range: 0.2
+    rear_min_range: 0.6
+    blind_rear_angle_deg: 90.0

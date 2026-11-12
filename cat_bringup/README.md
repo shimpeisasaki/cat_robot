@@ -51,8 +51,8 @@ RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では�
 正常受信中は接続を保持し、切断時は30秒から最大300秒へ間隔を延ばして再接続する。
 RTKの実機起動・Fix・精度は未確認で、GNSSをNav2へ融合する処理も含まない。
 
-現在のURDFでは、未使用の `VLP16_F`・`VLP16_B`・`RPLIDAR_B` を
-コメントアウトして保存しています。これらの取付TFが必要になったら復帰してください。
+VLP-16・後方RPLiDARの起動・設定・未使用URDFは廃止しました。
+過去の取付値と参照先は [保守記録](../docs/maintenance.md) に残します。
 `RPLIDAR_custom` は `rplidar_mount:=custom` のときだけ生成します。
 
 ZEDは `zed_supervisor` がwrapperとコンテナを同じプロセスグループで管理します。
@@ -70,7 +70,7 @@ Horizonはこの旧世代SDK用ROS 2ドライバの対応機種です。
 `livox_ros_driver2` / SDK2 は別の対応機種向けなので使用しません。
 SDKは `livox_sdk_vendor` がビルド領域へ取得・インストールします。
 既存の `/usr/local` のSDK2を変更する必要はありません。
-VLP-16同様、機体用のlaunch・設定・RVizはこのパッケージが所有します。
+機体用のlaunch・設定・RVizはこのパッケージが所有します。
 
 ```bash
 cd ~/ros2_ws
@@ -139,7 +139,7 @@ ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=false \
 この構成ではRVizの固定座標系は `base_link`、`Horizon points` が
 `/livox/lidar` を購読し、URDFの反転・傾斜を反映して表示します。
 停止時のStandby確認はHorizon単体launchと共通です。
-既存の `/velodyne_points`、terrain detector、Nav2への接続は変更していません。
+cat_bringupは点群・IMU・TFまでを担当し、地形処理やNav2のアルゴリズムは所有しません。
 
 公式ドライバの生の時刻を保持しています。今回の未同期機ではstampが
 機体起動からの相対時刻でした。後続の地形検出に接続する際は、ROS時刻への

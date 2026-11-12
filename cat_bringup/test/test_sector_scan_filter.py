@@ -8,12 +8,37 @@ import unittest
 from unittest.mock import patch
 import yaml
 from launch import LaunchContext
+from launch.actions import DeclareLaunchArgument
 
 filter_ranges = runpy.run_path(str(
     Path(__file__).resolve().parents[1] / 'scripts/sector_scan_filter'))['filter_ranges']
 
 
 class SectorFilterTest(unittest.TestCase):
+    def test_launch_arguments_reject_retired_sensor_choices(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        cases = [
+            ('cat_bringup/launch/bringup.launch.py', 'lidar_source', 'vlp16'),
+            ('cat_bringup/launch/bringup.launch.py', 'lidar_source', 'both'),
+            ('cat_bringup/launch/bringup.launch.py', 'rplidar_mount', 'back'),
+            ('cat_bringup/launch/rplidar_s1.launch.py', 'frame_id', 'RPLIDAR_B'),
+            ('cat_navigation/launch/mapping.launch.py', 'lidar_source', 'both'),
+            ('cat_navigation/launch/mapping.launch.py', 'rplidar_mount', 'back'),
+            ('cat_navigation/launch/navigation.launch.py', 'lidar_source', 'both'),
+            ('cat_navigation/launch/navigation.launch.py', 'rplidar_mount', 'back'),
+        ]
+        with tempfile.TemporaryDirectory() as log_dir, patch.dict(
+                os.environ, {'ROS_LOG_DIR': log_dir}):
+            for path, name, value in cases:
+                with self.subTest(path=path, argument=name, value=value):
+                    launch = runpy.run_path(str(root / path))['generate_launch_description']()
+                    declaration = next(entity for entity in launch.entities
+                                       if isinstance(entity, DeclareLaunchArgument) and entity.name == name)
+                    context = LaunchContext()
+                    context.launch_configurations[name] = value
+                    with self.assertRaises(RuntimeError):
+                        declaration.execute(context)
+
     def test_blind_rear_sector_is_unknown_even_for_infinite_or_far_returns(self):
         for distance in (.3, 2., float('inf')):
             self.assertTrue(math.isnan(filter_ranges(
@@ -23,17 +48,25 @@ class SectorFilterTest(unittest.TestCase):
             [2.], math.pi, 0., math.pi, math.radians(270), .2, .6,
             blind_rear_angle=math.pi/2)[0], 2.)
 
-    def test_back_mask_is_uniform(self):
+    def test_default_config_matches_front_mount_mask(self):
         config = yaml.safe_load((Path(__file__).resolve().parents[1] /
                                  'config/scan_filter.yaml').read_text())
         params = config['sector_scan_filter']['ros__parameters']
         self.assertEqual(params['front_min_range'], 0.2)
-        self.assertEqual(params['rear_min_range'], 0.2)
-        for bearing in (-math.pi, -math.pi / 2, 0, math.pi / 2, math.pi):
-            self.assertTrue(math.isnan(filter_ranges(
-                [0.19], bearing, 0, params['mounting_yaw'],
-                math.radians(params['front_angle_deg']), 0.2, 0.2,
-                -1.0)[0]))
+        self.assertEqual(params['rear_min_range'], 0.6)
+        self.assertEqual(params['scan_frame'], 'RPLIDAR_F')
+        self.assertEqual(params['mounting_roll'], 0.0)
+        self.assertEqual(params['mounting_yaw'], math.pi)
+        for bearing, expected in [(math.pi, .3), (0., math.nan)]:
+            result = filter_ranges(
+                [.3], bearing, 0, params['mounting_yaw'],
+                math.radians(params['front_angle_deg']),
+                params['front_min_range'], params['rear_min_range'],
+                blind_rear_angle=math.radians(params['blind_rear_angle_deg']))[0]
+            if math.isnan(expected):
+                self.assertTrue(math.isnan(result))
+            else:
+                self.assertEqual(result, expected)
 
     def test_front_mount_uses_rear_90_degree_mask(self):
         for bearing in (-135, 0, 135):
@@ -54,8 +87,7 @@ class SectorFilterTest(unittest.TestCase):
     def test_launch_selects_mask_from_scan_frame(self):
         launch_path = (Path(__file__).resolve().parents[1] /
                        'launch/rplidar_s1.launch.py')
-        for frame, expected in [('RPLIDAR_F', 0.6), ('RPLIDAR_B', 0.2),
-                                ('RPLIDAR_custom', 0.2)]:
+        for frame, expected in [('RPLIDAR_F', 0.6), ('RPLIDAR_custom', 0.2)]:
             with tempfile.TemporaryDirectory() as log_dir, patch.dict(
                     os.environ, {'ROS_LOG_DIR': log_dir}):
                 launch = runpy.run_path(str(launch_path))['generate_launch_description']()
@@ -96,7 +128,7 @@ class SectorFilterTest(unittest.TestCase):
             self.assertEqual(out[i], 0.2)
 
     def test_upside_down_right_facing_mount(self):
-        # RPLIDAR_B: roll 180 deg reverses each scan bearing before yaw +90 deg.
+        # An inverted custom mount reverses each bearing before yaw +90 deg.
         out = filter_ranges([0.2, 0.2], -math.pi / 2, math.pi,
                             math.pi / 2, math.radians(200), 0.1, 0.4, -1.0)
         self.assertTrue(math.isnan(out[0]))  # sensor -90 deg points vehicle rear

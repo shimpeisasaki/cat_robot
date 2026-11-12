@@ -123,9 +123,9 @@ def generate_launch_description():
                               description='Optional waypoint YAML; load/display only until ~/start is called.'),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
-                              choices=['rplidar', 'both']),
+                              choices=['rplidar']),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
-                              choices=['front', 'back', 'custom', 'legacy']),
+                              choices=['front', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -178,9 +178,7 @@ def generate_launch_description():
              name='navigation_guard', output='screen', parameters=[{
                  'scan_frame': PythonExpression([
                      "'RPLIDAR_F' if '", LaunchConfiguration('rplidar_mount'),
-                     "' in ('front', 'legacy') else ('RPLIDAR_B' if '",
-                     LaunchConfiguration('rplidar_mount'),
-                     "' == 'back' else 'RPLIDAR_custom')"])}]),
+                     "' in ('front', 'legacy') else 'RPLIDAR_custom'"])}]),
         Node(package='nav2_collision_monitor', executable='collision_monitor',
              name='collision_monitor', output='screen', parameters=[params_file]),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
