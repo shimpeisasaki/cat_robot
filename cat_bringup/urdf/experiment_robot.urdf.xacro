@@ -86,13 +86,6 @@
     <parent link="base_link"/><child link="RPLIDAR_F"/>
     <origin xyz="0.00319 0 0.25435" rpy="0 0 ${pi}"/>
   </joint>
-  <!-- Rear mount retained for future use; currently disabled.
-  <link name="RPLIDAR_B"/>
-  <joint name="RPLIDAR_B_joint" type="fixed">
-    <parent link="base_link"/><child link="RPLIDAR_B"/>
-    <origin xyz="-0.3095 0 0.49735" rpy="${pi} 0 ${pi/2}"/>
-  </joint>
-  -->
   <xacro:if value="${'$(arg rplidar_mount)' == 'custom'}">
   <link name="RPLIDAR_custom"/>
   <joint name="RPLIDAR_custom_joint" type="fixed">
@@ -101,19 +94,6 @@
             rpy="$(arg rplidar_roll) 0 $(arg rplidar_yaw)"/>
   </joint>
   </xacro:if>
-
-  <!-- VLP-16 front and rear mounts retained for future use; currently disabled.
-  <link name="VLP16_F"/>
-  <joint name="VLP16_F_joint" type="fixed">
-    <parent link="base_link"/><child link="VLP16_F"/>
-    <origin xyz="0.0186 0 0.207" rpy="0 ${7*pi/180} 0"/>
-  </joint>
-  <link name="VLP16_B"/>
-  <joint name="VLP16_B_joint" type="fixed">
-    <parent link="base_link"/><child link="VLP16_B"/>
-    <origin xyz="-0.347981 0 0.515158" rpy="${(180-20)*pi/180} 0 ${-pi/2}"/>
-  </joint>
-  -->
 
   <!-- Horizon sensor origin: 270.96 mm behind the axle, centered,
        435.70 mm above ground. Inverted (roll=pi), forward axis tilted down 15.570 deg.

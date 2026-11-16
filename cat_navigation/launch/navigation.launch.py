@@ -92,6 +92,10 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('slam', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
+            "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
+            choices=['off', 'standalone', 'rtk']),
+        DeclareLaunchArgument('rtk_source', default_value='cit', choices=['cit', 'matsudo']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('use_zed', default_value='false', choices=['true', 'false']),
@@ -119,9 +123,9 @@ def generate_launch_description():
                               description='Optional waypoint YAML; load/display only until ~/start is called.'),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
-                              choices=['rplidar', 'both']),
+                              choices=['rplidar']),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
-                              choices=['front', 'back', 'custom', 'legacy']),
+                              choices=['front', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -156,6 +160,8 @@ def generate_launch_description():
                 'enable_panorama': LaunchConfiguration('enable_panorama'),
                 'panorama_output_dir': LaunchConfiguration('panorama_output_dir'),
                 'use_gnss': LaunchConfiguration('use_gnss'),
+                'gnss_mode': LaunchConfiguration('gnss_mode'),
+                'rtk_source': LaunchConfiguration('rtk_source'),
                 'gnss_serial': LaunchConfiguration('gnss_serial'),
                 'serial_port': LaunchConfiguration('serial_port'),
                 'lidar_source': LaunchConfiguration('lidar_source'),
@@ -172,9 +178,7 @@ def generate_launch_description():
              name='navigation_guard', output='screen', parameters=[{
                  'scan_frame': PythonExpression([
                      "'RPLIDAR_F' if '", LaunchConfiguration('rplidar_mount'),
-                     "' in ('front', 'legacy') else ('RPLIDAR_B' if '",
-                     LaunchConfiguration('rplidar_mount'),
-                     "' == 'back' else 'RPLIDAR_custom')"])}]),
+                     "' in ('front', 'legacy') else 'RPLIDAR_custom'"])}]),
         Node(package='nav2_collision_monitor', executable='collision_monitor',
              name='collision_monitor', output='screen', parameters=[params_file]),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',

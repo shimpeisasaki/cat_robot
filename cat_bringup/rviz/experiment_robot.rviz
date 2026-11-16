@@ -78,10 +78,6 @@ Visualization Manager:
         Alpha: 1
         Show Axes: false
         Show Trail: false
-      RPLIDAR_B:
-        Alpha: 1
-        Show Axes: false
-        Show Trail: false
       RPLIDAR_custom:
         Alpha: 1
         Show Axes: false
@@ -151,13 +147,7 @@ Visualization Manager:
         Value: true
       RPLIDAR_F:
         Value: true
-      RPLIDAR_B:
-        Value: true
       RPLIDAR_custom:
-        Value: true
-      VLP16_F:
-        Value: true
-      VLP16_B:
         Value: true
       left_wheel_link:
         Value: true
@@ -189,10 +179,7 @@ Visualization Manager:
         chassis_link: {}
         gnss_antenna_link: {}
         RPLIDAR_F: {}
-        RPLIDAR_B: {}
         RPLIDAR_custom: {}
-        VLP16_F: {}
-        VLP16_B: {}
         left_wheel_link: {}
         right_wheel_link: {}
         safety_footprint_link: {}
@@ -276,25 +263,6 @@ Visualization Manager:
       Value: /zed/zed_node/point_cloud/cloud_registered
     Use Fixed Frame: true
     Use rainbow: true
-    Value: true
-  - Alpha: 1
-    Autocompute Intensity Bounds: true
-    Class: rviz_default_plugins/PointCloud2
-    Color Transformer: Intensity
-    Decay Time: 0
-    Enabled: true
-    Name: VLP-16 points
-    Position Transformer: XYZ
-    Selectable: true
-    Size (Pixels): 2
-    Style: Points
-    Topic:
-      Depth: 5
-      Durability Policy: Volatile
-      History Policy: Keep Last
-      Reliability Policy: Reliable
-      Value: /velodyne_points
-    Use Fixed Frame: true
     Value: true
   - Alpha: 1
     Class: rviz_default_plugins/PointCloud2

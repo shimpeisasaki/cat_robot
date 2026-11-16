@@ -10,11 +10,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
-def rplidar_mount_value(argument, front, back):
+def rplidar_mount_value(argument, front):
     return PythonExpression([
         "'", front, "' if '", LaunchConfiguration('rplidar_mount'),
-        "' in ('front', 'legacy') else ('", back, "' if '", LaunchConfiguration('rplidar_mount'),
-        "' == 'back' else '", LaunchConfiguration(argument), "')"])
+        "' in ('front', 'legacy') else '", LaunchConfiguration(argument), "'"])
 
 
 def generate_launch_description():
@@ -22,21 +21,26 @@ def generate_launch_description():
     robot_config = LaunchConfiguration('robot_config')
     manual_config = LaunchConfiguration('manual_config')
     model = PathJoinSubstitution([share, 'urdf', 'experiment_robot.urdf.xacro'])
-    rplidar_roll = rplidar_mount_value('rplidar_roll', '0', '3.141592653589793')
-    rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793', '1.5707963267948966')
+    rplidar_roll = rplidar_mount_value('rplidar_roll', '0')
+    rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793')
     rplidar_frame = PythonExpression([
         "'RPLIDAR_F' if '", LaunchConfiguration('rplidar_mount'),
-        "' in ('front', 'legacy') else ('RPLIDAR_B' if '", LaunchConfiguration('rplidar_mount'),
-        "' == 'back' else 'RPLIDAR_custom')"])
+        "' in ('front', 'legacy') else 'RPLIDAR_custom'"])
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
+        DeclareLaunchArgument('odom_pose_mode', default_value='planar', choices=['planar', 'spatial']),
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
+            "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
+            choices=['off', 'standalone', 'rtk'],
+            description='GNSS mode; rtk uses the selected correction source (CIT by default)'),
+        DeclareLaunchArgument('rtk_source', default_value='cit', choices=['cit', 'matsudo']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
-                              choices=['front', 'back', 'custom', 'legacy']),
+                              choices=['front', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_front_blind_rear_angle_deg', default_value='90.0'),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
@@ -47,17 +51,13 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_motor_tools', default_value='false'),
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
-                              choices=['rplidar', 'vlp16', 'both', 'horizon']),
+                              choices=['rplidar', 'horizon']),
         DeclareLaunchArgument('horizon_config', default_value=PathJoinSubstitution([
             share, 'config', 'horizon.yaml'])),
         DeclareLaunchArgument('horizon_user_config', default_value=PathJoinSubstitution([
             share, 'config', 'horizon.json'])),
         DeclareLaunchArgument('horizon_imu_calibration', default_value=PathJoinSubstitution([
             share, 'config', 'horizon_imu.yaml'])),
-        DeclareLaunchArgument('vlp16_config', default_value=PathJoinSubstitution([
-            share, 'config', 'vlp16.yaml'])),
-        DeclareLaunchArgument('vlp16_mount', default_value='back',
-                              choices=['front', 'back']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_panorama', default_value='true', choices=['true', 'false']),
@@ -89,7 +89,8 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'odometry.launch.py'])),
-            launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items(),
+            launch_arguments={'odom_source': LaunchConfiguration('odom_source'),
+                              'odom_pose_mode': LaunchConfiguration('odom_pose_mode')}.items(),
             condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              parameters=[{'autorepeat_rate': 20.0, 'deadzone': 0.05}],
@@ -138,21 +139,12 @@ def generate_launch_description():
                 share, 'launch', 'rplidar_s1.launch.py'])),
             condition=IfCondition(PythonExpression([
                 "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
-                LaunchConfiguration('lidar_source'), "' in ('rplidar', 'both')"])),
+                LaunchConfiguration('lidar_source'), "' == 'rplidar'"])),
             launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
                               'frame_id': rplidar_frame,
                               'front_blind_rear_angle_deg': LaunchConfiguration('rplidar_front_blind_rear_angle_deg'),
                               'mounting_roll': rplidar_roll,
                               'mounting_yaw': rplidar_yaw}.items()),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'vlp16.launch.py'])),
-            condition=IfCondition(PythonExpression([
-                "'", LaunchConfiguration('use_lidar'), "' == 'true' and '",
-                LaunchConfiguration('lidar_source'), "' in ('vlp16', 'both')"])),
-            launch_arguments={'config': LaunchConfiguration('vlp16_config'),
-                              'mount': LaunchConfiguration('vlp16_mount'),
-                              'show_rviz': 'false'}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 share, 'launch', 'horizon.launch.py'])),
@@ -167,9 +159,13 @@ def generate_launch_description():
             }.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                FindPackageShare('ublox_dgnss'), 'launch', 'gnss_launch_compatible.launch.py'])),
-            condition=IfCondition(LaunchConfiguration('use_gnss')),
-            launch_arguments={'frame_id': 'gnss_antenna_link',
+                FindPackageShare('ublox_dgnss'), 'launch', PythonExpression([
+                    "'gnss_rtk.launch.py' if '", LaunchConfiguration('gnss_mode'),
+                    "' == 'rtk' else 'gnss_launch_compatible.launch.py'"])])),
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration('gnss_mode'), "' != 'off'"])),
+            launch_arguments={'rtk_source': LaunchConfiguration('rtk_source'),
+                              'frame_id': 'gnss_antenna_link',
                               'device_serial_string': LaunchConfiguration('gnss_serial')}.items()),
         Node(package='rviz2', executable='rviz2', output='screen',
              arguments=['-d', PathJoinSubstitution([

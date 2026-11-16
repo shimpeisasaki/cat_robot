@@ -20,12 +20,16 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
+            "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
+            choices=['off', 'standalone', 'rtk']),
+        DeclareLaunchArgument('rtk_source', default_value='cit', choices=['cit', 'matsudo']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('lidar_source', default_value='rplidar',
-                              choices=['rplidar', 'both']),
+                              choices=['rplidar']),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
-                              choices=['front', 'back', 'custom', 'legacy']),
+                              choices=['front', 'custom', 'legacy']),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -59,6 +63,8 @@ def generate_launch_description():
             launch_arguments={
                 'use_base': 'true',
                 'use_gnss': LaunchConfiguration('use_gnss'),
+                'gnss_mode': LaunchConfiguration('gnss_mode'),
+                'rtk_source': LaunchConfiguration('rtk_source'),
                 'gnss_serial': LaunchConfiguration('gnss_serial'),
                 'serial_port': LaunchConfiguration('serial_port'),
                 'lidar_source': LaunchConfiguration('lidar_source'),

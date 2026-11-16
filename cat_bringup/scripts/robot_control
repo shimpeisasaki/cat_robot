@@ -1,0 +1,35 @@
+#!/bin/sh
+# One explicit operator action through the existing safety state machine.
+set -eu
+
+if [ "$#" -gt 1 ]; then
+    printf '%s\n' 'Usage: robot_control [status|motors|arm|brake|manual|free|help]' >&2
+    exit 2
+fi
+
+case "${1:-help}" in
+    help|--help|-h)
+        printf '%s\n' \
+            'Usage: robot_control [status|motors|arm|brake|manual|free|help]' \
+            'status: read requested control state once; motors: read feedback bits once.' \
+            'arm: explicitly permit external commands after healthy stationary BRAKE.' \
+            'brake: cancel pending requests and latch stop; manual: request joystick mode.' \
+            'free: request torque release after confirmed rest (vehicle may roll).' \
+            'Rearm: brake, inspect status/motors and faults, then explicitly arm.' \
+            'No automatic enabling, retries, or velocity commands.'
+        ;;
+    status)
+        exec ros2 topic echo /base_safety/control_state cat_control_interfaces/msg/ControlState \
+            --once --qos-durability transient_local --qos-reliability reliable
+        ;;
+    motors)
+        exec ros2 topic echo /base/state std_msgs/msg/UInt8 --once
+        ;;
+    arm|brake|manual|free)
+        exec ros2 service call "/base_safety/$1" std_srvs/srv/Trigger '{}'
+        ;;
+    *)
+        printf 'Unknown action: %s\n' "$1" >&2
+        exit 2
+        ;;
+esac

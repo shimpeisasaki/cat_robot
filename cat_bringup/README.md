@@ -1,10 +1,58 @@
 # cat_bringup
 
+実機のground/frontier探索向けに、`horizon.launch.py timestamp_mode:=host_offset` と
+`bringup.launch.py odom_source:=vio odom_pose_mode:=spatial` を追加。
+統合起動は [recovery_explorationの実機手順](../../recovery_exploration/HARDWARE_EXPLORATION.md)。
+既定は従来どおりHorizonのセンサー時刻保持、オドメトリの平面化。
+host_offsetでは元入力を `/livox/lidar_sensor_raw`・`/livox/imu_sensor_raw` に残し、
+点群とIMUへ共通の固定offsetを適用する。1秒の初期化後も時計の飛び・逆行を監視し、
+配信開始後の異常時は再起動まで配信を停止する。受信時刻に基づく近似であり外部時刻同期ではない。
+spatialはZED VIO専用で、SDKの重力基準WORLD姿勢
+`/zed/zed_node/pose_with_covariance` を使う。カメラ相対の `/zed/zed_node/odom` は
+spatial入力に使わない。取付TFでbaseへ変換し、初期の並進・yawだけを原点化する。
+起動時からroll/pitchを保持するため、水平床での開始は必要ない。
+`zed_vio.yaml` はIMU融合・重力基準を有効、2D化・area memory・wrapper TF配信を無効にする。
+WORLD poseの共分散配信を有効にし、速度は変換後base姿勢の差分から求める。
+2026-11-11、カメラ相対odomを重力基準と扱い平地を12度の坂と誤判定する不具合を修正した。
+校正済みHorizonの取付TFと地面判定しきい値は変更していない。
+ZEDの実取付ずれの測定は別作業で、校正テストは `robot_sensor_tests` に置く。
+坂での推定精度は実機未検証。時刻bridge/VIO停止後は機体を止めてstack全体を再起動する。
+
+2026-11-10のオフライン確認：cat_bringupをfocused buildし、`CAT_TEST_HORIZON` を
+unsetしてcolcon testを実施。62件中61件成功、明示opt-inの実機power試験1件はskip。
+模擬点群/IMUで時刻対応と停止ラッチ、模擬ZED/取付TFで高さ・pitchの配信と
+追跡断後の停止を確認した。ハードウェア・シミュレータ・RVizは起動していない。
+
+2026-11-11の実機bringupで、サンプリング開始直後の時刻飛びが初期化を止める事象を確認。
+未配信のwarmup中だけ仮のoffsetと両入力履歴を捨て、安定した1秒を待ち直すよう修正した。
+配信開始には両入力が0.5秒以内に受信されていることも要求する。
+配信開始後の再対応付けは禁止のまま。単体・模擬ROSテスト17件成功。
+実機再確認では点群10Hz・IMU約50Hz、点群時刻差約0.10秒で20秒間受信できた。
+`/livox/time_status` の `warmup_resets` で初期化待ち直し数を確認できる。
+
 機体起動・設定・TF・センサ・停止制御の所有元です。
 起動方法、設定一覧、公開トピックは[リポジトリREADME](../README.md)を参照してください。
 
-現在のURDFでは、未使用の `VLP16_F`・`VLP16_B`・`RPLIDAR_B` を
-コメントアウトして保存しています。これらの取付TFが必要になったら復帰してください。
+## GNSS・RTK基準局の切り替え
+
+既存の起動コマンドに **`gnss_mode:=rtk`** を指定すると、受信機と大学CIT局の
+NTRIPクライアントをまとめて起動する。既定は `rtk_source:=cit`、接続先は `taroz.net:2101/CIT`。
+認証はGit管理外の `~/.config/ublox_dgnss/ntrip_cit.json`（所有者だけ読み書き可能）から読む。
+公開松戸局は `rtk_source:=matsudo` で選択できる。接続先は `geortk.jp:2101/Matsudo`、認証は不要。
+通常の単独測位は `gnss_mode:=standalone`、GNSS無効は `gnss_mode:=off`。
+同じ引数を `cat_navigation` のmapping/navigation launchにも指定できる。
+既定は `off`。従来の `use_gnss:=true` は単独測位として有効で、
+`gnss_mode` を明示した場合はそちらを優先する。切り替えはlaunchの再起動時に適用する。
+
+GNSS有効時の測位周期は5 Hz、衛星選別条件は受信機の保存値を使う。
+RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では無効にする。
+既存の `/gnss/fix`・`/gnss/fix_velocity` と `gnss_antenna_link` を使用する。
+大学・松戸の各局からの補正受信とオフラインの起動構成は確認済み。
+正常受信中は接続を保持し、切断時は30秒から最大300秒へ間隔を延ばして再接続する。
+RTKの実機起動・Fix・精度は未確認で、GNSSをNav2へ融合する処理も含まない。
+
+VLP-16・後方RPLiDARの起動・設定・未使用URDFは廃止しました。
+過去の取付値と参照先は [保守記録](../docs/maintenance.md) に残します。
 `RPLIDAR_custom` は `rplidar_mount:=custom` のときだけ生成します。
 
 ZEDは `zed_supervisor` がwrapperとコンテナを同じプロセスグループで管理します。
@@ -22,7 +70,7 @@ Horizonはこの旧世代SDK用ROS 2ドライバの対応機種です。
 `livox_ros_driver2` / SDK2 は別の対応機種向けなので使用しません。
 SDKは `livox_sdk_vendor` がビルド領域へ取得・インストールします。
 既存の `/usr/local` のSDK2を変更する必要はありません。
-VLP-16同様、機体用のlaunch・設定・RVizはこのパッケージが所有します。
+機体用のlaunch・設定・RVizはこのパッケージが所有します。
 
 ```bash
 cd ~/ros2_ws
@@ -91,7 +139,7 @@ ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=false \
 この構成ではRVizの固定座標系は `base_link`、`Horizon points` が
 `/livox/lidar` を購読し、URDFの反転・傾斜を反映して表示します。
 停止時のStandby確認はHorizon単体launchと共通です。
-既存の `/velodyne_points`、terrain detector、Nav2への接続は変更していません。
+cat_bringupは点群・IMU・TFまでを担当し、地形処理やNav2のアルゴリズムは所有しません。
 
 公式ドライバの生の時刻を保持しています。今回の未同期機ではstampが
 機体起動からの相対時刻でした。後続の地形検出に接続する際は、ROS時刻への
