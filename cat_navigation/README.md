@@ -159,3 +159,23 @@ EMCLが `transform_tolerance`（既定0.2秒）を加えて配信する `map -> 
 ## ライセンス
 
 本リポジトリは [Apache License, Version 2.0](../LICENSE)（SPDX識別子: `Apache-2.0`）で提供する。外部依存パッケージには、それぞれのライセンスが適用される。
+
+
+## 要求型GNSS自己位置リセットの接続
+
+保存地図のlocalizationで `use_gnss_reset:=true` と
+`gnss_map_params_file:=/absolute/path/to/calibration.yaml` を明示すると、gnss2mapの
+変換ノードを1個起動し、emcl2の要求受付を有効にする。既定は無効。
+この設定は受信機を起動しない。navigation全体から使う際の受信機選択は従来どおり
+`gnss_mode:=rtk rtk_source:=cit`（またはstandalone）を別途指定する。
+localization単独では `/gnss/fix` と必要なTFを外部から供給する。
+
+変換は `/gnss/fix` → `/gnss/map_pose`、状態はubloxから `/gnss/status`。
+GNSSアンテナframeは既存の `gnss_antenna_link` を使用し、取付校正は変更しない。
+変換側frame_idとemcl2のglobal_frame_idは一致させる。校正は選択したlocalization_mapに
+対応したものを使うこと。過去のgnss2map設定を無検証で現地図へ適用しない。
+
+破綻通知・要求・結果の正本は `src/emcl2_ros2/GNSS_RECOVERY.md`、
+変換設定は `src/gnss2map/README.md`、受信・品質はubloxの出力契約を参照。
+リセット要求を送る上位BT、移動、再試行場所選択、通常走行復帰はこの変更に含まれない。
+自己位置回復は走行許可や停止ラッチを解除しない。実機起動は別途明示指示が必要。

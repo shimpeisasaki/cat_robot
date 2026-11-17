@@ -21,6 +21,12 @@ from nav2_common.launch import RewrittenYaml
 def map_nodes(context):
     """Validate paths before starting hardware and keep localization inputs isolated."""
     slam = LaunchConfiguration('slam').perform(context) == 'true'
+    if LaunchConfiguration('use_gnss_reset').perform(context) == 'true':
+        if slam:
+            raise ValueError('GNSS reset requires saved-map localization, not slam:=true')
+        calibration = Path(LaunchConfiguration('gnss_map_params_file').perform(context)).expanduser()
+        if not calibration.is_file():
+            raise ValueError('GNSS reset requires an explicit gnss_map_params_file')
     localization = LaunchConfiguration('localization_map').perform(context)
     navigation = LaunchConfiguration('navigation_map').perform(context)
     if not slam and not localization:
@@ -58,6 +64,8 @@ def map_nodes(context):
                 'map': str(Path(localization).expanduser().resolve()),
                 'use_sim_time': 'false',
                 'localization_params_file': LaunchConfiguration('localization_params_file'),
+                'use_gnss_reset': LaunchConfiguration('use_gnss_reset'),
+                'gnss_map_params_file': LaunchConfiguration('gnss_map_params_file'),
             }.items()))
     return actions
 
@@ -91,6 +99,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('slam', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('use_gnss_reset', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('gnss_map_params_file', default_value=''),
         DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
             "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
