@@ -47,9 +47,13 @@ NTRIPクライアントをまとめて起動する。既定は `rtk_source:=cit`
 GNSS有効時の測位周期は5 Hz、衛星選別条件は受信機の保存値を使う。
 RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では無効にする。
 既存の `/gnss/fix`・`/gnss/fix_velocity` と `gnss_antenna_link` を使用する。
+受信状況・品質は `/gnss/status`。時刻・有効フラグの解釈は
+[ublox出力契約](../../ublox_dgnss/docs/gnss_output_contract.md) を参照する。
 大学・松戸の各局からの補正受信とオフラインの起動構成は確認済み。
 正常受信中は接続を保持し、切断時は30秒から最大300秒へ間隔を延ばして再接続する。
-RTKの実機起動・Fix・精度は未確認で、GNSSをNav2へ融合する処理も含まない。
+RTKの実機起動・Fix・精度は未確認。受信機起動だけでは自己位置リセットを有効にしない。
+保存地図への変換と要求型リセットの接続は
+[cat_navigationの正本](../cat_navigation/README.md#要求型gnss自己位置リセットの接続) を参照する。
 
 VLP-16・後方RPLiDARの起動・設定・未使用URDFは廃止しました。
 過去の取付値と参照先は [保守記録](../docs/maintenance.md) に残します。

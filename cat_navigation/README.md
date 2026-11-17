@@ -175,7 +175,14 @@ GNSSアンテナframeは既存の `gnss_antenna_link` を使用し、取付校�
 変換側frame_idとemcl2のglobal_frame_idは一致させる。校正は選択したlocalization_mapに
 対応したものを使うこと。過去のgnss2map設定を無検証で現地図へ適用しない。
 
-破綻通知・要求・結果の正本は `src/emcl2_ros2/GNSS_RECOVERY.md`、
-変換設定は `src/gnss2map/README.md`、受信・品質はubloxの出力契約を参照。
+破綻通知・要求・結果は [emcl2の回復仕様](../../emcl2_ros2/GNSS_RECOVERY.md)、
+変換設定は [gnss2map](../../gnss2map/README.md)、
+受信・品質は [ubloxの出力契約](../../ublox_dgnss/docs/gnss_output_contract.md) が正本。
+取付位置は [URDF](../cat_bringup/urdf/experiment_robot.urdf.xacro) を正本とし、
+emcl2がそのTFを使って平面XYのアンテナ位置差を補正する。
+
+`localization.launch.py` 単独は受信機・走行ノードを起動しないが、
+`navigation.launch.py` はbringupを含む。接続設定の確認だけで実行しない。
+`slam:=true` と `use_gnss_reset:=true` の併用は拒否する。
 リセット要求を送る上位BT、移動、再試行場所選択、通常走行復帰はこの変更に含まれない。
 自己位置回復は走行許可や停止ラッチを解除しない。実機起動は別途明示指示が必要。

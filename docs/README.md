@@ -21,3 +21,8 @@ bringupを重ねて起動しない。cat_navigationは基本安全を所有せ�
 - [保守と採用履歴](maintenance.md)：検証手順、評価記録、廃止機器、panorama枝の判断。
 - [2026-11-05採用校正](../../robot_sensor_tests/docs/2026-11-05_calibration.md)：
   取付値と否定的結果。生データを複製せず元の記録を参照する。
+
+- [要求型GNSSリセットの接続](../cat_navigation/README.md#要求型gnss自己位置リセットの接続)：
+  受信機起動・座標変換・リセット有効化の区別。各機能の正本への入口。
+- [GNSS実装時のオフライン検証](validation/gnss_reset_20261117.md)、
+  [GNSS文書再点検](validation/gnss_docs_review_20261117.md)：日付と対象SHAを持つ別々の記録。
