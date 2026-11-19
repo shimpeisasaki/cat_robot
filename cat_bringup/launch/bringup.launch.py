@@ -40,6 +40,8 @@ def generate_launch_description():
         DeclareLaunchArgument('rplidar_mount', default_value='front',
                               choices=['front', 'custom']),
         DeclareLaunchArgument('rplidar_front_blind_rear_angle_deg', default_value='90.0'),
+        DeclareLaunchArgument('rplidar_filter_config', default_value=PathJoinSubstitution([
+            share, 'config', 'scan_filter.yaml'])),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -141,6 +143,7 @@ def generate_launch_description():
             launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
                               'frame_id': rplidar_frame,
                               'front_blind_rear_angle_deg': LaunchConfiguration('rplidar_front_blind_rear_angle_deg'),
+                              'filter_config': LaunchConfiguration('rplidar_filter_config'),
                               'mounting_roll': rplidar_roll,
                               'mounting_yaw': rplidar_yaw}.items()),
         IncludeLaunchDescription(

@@ -96,7 +96,8 @@ VLP-16と後方RPLiDARの起動・機種選択・設定・専用依存は廃止�
 センサの近距離測定能力を保証する値ではない。
 
 `RPLIDAR_F` は車体に遮られる後方を未観測として扱うため、車体基準の後方90°を
-測距値にかかわらずNaNにする。`/scan_raw` は保持する。
+測距値にかかわらずNaNにする。フィルタはC++ドライバ内で適用し、`/scan`を直接出す。
+設定と校正時の無効化は[LiDARフィルタの正本](cat_bringup/README.md#lidar-filter)を参照。
 bringup引数 `rplidar_front_blind_rear_angle_deg`（既定90）で変更できるが、
 角度は実際の記録で検証する必要がある。customにはこの死角マスクを自動適用しない。
 
@@ -129,7 +130,7 @@ ros2 run cat_bringup robot_control brake
 | `/wheel/odom` | 車輪RPMから生成したオドメトリ |
 | `/wheel_odom` | 車輪・IMU EKFによる推定値 |
 | `/odom` | 選択した推定値。`odom → base_link` のTFも配信 |
-| `/scan`、`/scan_raw` | フィルタ後のLiDAR、フィルタ前のLiDAR |
+| `/scan` | ドライバ内でフィルタしたLiDAR |
 | `/zed/zed_node/rgb/color/raw/image/compressed` | `sensor_msgs/msg/CompressedImage`、未補正JPEG、品質90・672×376。起動時OFF、grab30fps・worker上限24Hz。実測周期は負荷で変動。VIO/IMUとは独立 |
 | `/base/state`、`/diagnostics` | モーター状態、電流・温度・異常の診断 |
 | `/cmd_vel_external`、`/cmd_vel_teleop`、`/cmd_vel_panorama` | 外部走行指令、平滑化済み手動指令、撮影旋回指令 |
@@ -153,7 +154,7 @@ ros2 launch ddsm115_controller motor_test_gui.launch.py
 |---|---|
 | `No reply from ... motor` | モーター電源、左右のUSB接続、`robot.yaml` のポートとID |
 | `/dev/rplidar` がない | USB接続、udevルール、`dialout` 権限 |
-| `/scan` がない | LiDARドライバ、`/scan_raw`、`sector_scan_filter` |
+| `/scan` がない | LiDARドライバ、`scan_filter.yaml`の設定 |
 | 走行が許可されない | `/base_safety/status`、`/base/state`、ジョイスティックのB/Y入力 |
 
 Nav2・地図・waypointに関する確認は [cat_navigation/README.md](cat_navigation/README.md) を参照する。ZEDを使わない地図作成は `ros2 launch cat_navigation mapping.launch.py`、保存地図でのナビゲーションは `ros2 launch cat_navigation navigation.launch.py` で起動する。両方とも既定で車輪オドメトリと2D LiDARを使用する。

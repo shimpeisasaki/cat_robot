@@ -153,7 +153,7 @@ costmapのLiDAR障害物高さ上限はlocal/globalともに0.8 m、スキャン
 | 地図が表示されない | 地図YAMLの `image` と画像ファイル、`map/` のインストール状態 |
 | RVizが起動しない | `navigation_rviz` 引数、起動ログ、画面表示環境 |
 | 巡回が始まらない | `/waypoint_route/start` の応答、`/waypoint_route/status`、`/base_safety/status` |
-| `/scan` の更新警告 | LiDARの接続、`/scan_raw` と `/scan` の配信状態 |
+| `/scan` の更新警告 | LiDARの接続、`/scan` の配信状態と[フィルタ設定](../cat_bringup/README.md#lidar-filter) |
 | 走行許可が解除される | `/navigation/ready`、`/base_safety/status`、モーター診断 |
 
 機体側の通信と停止制御は [cat_robotのREADME](../README.md) を参照する。

@@ -245,3 +245,26 @@ Ctrl+C正常終了を確認し、対象機未接続で受信待ち中の正常�
 CAT_TEST_HORIZON=1 PYTHONNOUSERSITE=1 python3 -m pytest -q \
   src/cat_robot/cat_bringup/test/test_horizon_power.py
 ```
+
+<a id="lidar-filter"></a>
+
+## LiDARフィルタ
+
+RPLiDARは`sllidar_ros2`のC++内でマスクし、`/scan`を直接配信する。
+旧Python `sector_scan_filter`と`/scan_raw`へのリマップは廃止した。
+機体設定は[config/scan_filter.yaml](config/scan_filter.yaml)の
+`sllidar_node.ros__parameters`に置く。`sector_filter_enabled`はCATではtrue、
+ドライバ単体ではfalse。変更は起動時に適用され、実行中の設定変更は行わない。
+
+距離・角度設定と座標式は[ドライバ契約](../../sllidar_ros2/README.md#optional-vehicle-sector-filter)を参照。
+frontはroll=0/yaw=pi、後方90度をNaN、前方270度は0.2 m未満をNaNとする。
+customは取付roll/yawを引き継ぎ、全周0.2 m未満をNaN、死角除外は0度。
+取付値はlaunch引数でYAMLを上書きし、rear最小距離と死角もframeに応じて上書きする。
+`mounting_roll`/`mounting_yaw`は車体方向の判定だけに使い、配信座標・TFは変えない。
+
+通常のbringupは`rplidar_filter_config`で別YAMLを指定できる。
+内部の`rplidar_s1.launch.py`では同じ引数を`filter_config`と呼ぶ。
+フィルタ前の測距が必要な校正では、YAMLのコピーで
+`sector_filter_enabled: false`にして指定する。走行時の通常設定は有効のまま使う。
+校正の手順は[robot_sensor_tests](../../robot_sensor_tests/README.md#rplidarの前後位置だけを校正する)を参照。
+過去の`/scan_raw`を含むbag・校正記録は当時のまま保持する。

@@ -388,7 +388,7 @@ class OperatorWindow(QMainWindow):
                 raise ValueError('ROSの状態取得を待ってから起動してください')
             conflicts = set(self.live_snapshot.get('nodes', [])) & {
                 'base_driver', 'slam_toolbox', 'motor_test_gui', 'controller_server', 'map_server',
-                'sllidar_node', 'zed_node', 'sector_scan_filter', 'base_safety'}
+                'sllidar_node', 'zed_node', 'base_safety'}
             if conflicts:
                 raise ValueError(f'既に起動した関連ノードがあります: {sorted(conflicts)}')
             self.begin_mode(settings, plan)

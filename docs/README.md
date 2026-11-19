@@ -31,3 +31,5 @@ bringupを重ねて起動しない。cat_navigationは基本安全を所有せ�
 
 - [JPEG入力移行のオフライン検証](validation/jpeg_input_20261118.md)：撮影・GUI録画preset・RViz。
 - [CAT/ZED整理の変更前後検証](validation/cat_zed_refactor_20261119.md)：fresh installと保持契約。
+
+- [LiDARフィルタのC++統合とオフライン検証](validation/scan_filter_integration_20261119.md)。

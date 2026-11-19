@@ -15,7 +15,7 @@ PRESETS = {
     '全トピック': [],
     '地図作成': MAPPING_TOPICS,
     '走行・ナビゲーション': MAPPING_TOPICS + [
-        '/scan_raw', '/wheel/odom', '/map', '/localization/map', '/joy',
+        '/wheel/odom', '/map', '/localization/map', '/joy',
         '/cmd_vel_safe', '/base/state', '/diagnostics', '/base_safety/control_state',
         '/navigation/ready', '/waypoint_route/status'],
     'ZED画像評価': MAPPING_TOPICS + [IMAGE_TOPIC, '/zed/zed_node/rgb/color/raw/camera_info'],
