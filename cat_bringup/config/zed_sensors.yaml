@@ -13,18 +13,21 @@
       pub_frame_rate: 24.0
       grab_compute_capping_fps: 0.0
     video:
-      # Wrapper requires publish_rgb for the rgb/raw publisher too.
-      # Rectified frames are retrieved only while that topic has subscribers.
+      # Only unrectified JPEG is advertised; Image/rect/theora are absent.
+      # Stream service still starts OFF. Quality is fixed until restart.
       publish_rgb: true
-      publish_compressed: false
+      publish_compressed: true
+      raw_jpeg_only: true
+      jpeg_quality: 90
       publish_left_right: false
       publish_raw: true
       publish_gray: false
       publish_stereo: false
       enable_24bit_output: true
     depth:
-      # Keep internal stereo depth processing without ZED positional tracking.
-      depth_mode: 'PERFORMANCE'
+      # Wheel + IMU needs neither stereo depth nor stabilization tracking.
+      depth_mode: 'NONE'
+      depth_stabilization: 0
       # Keep the ZED wrapper's depth confidence defaults; tighter filtering
       # removed too many floor points in the local costmap.
       depth_confidence: 95

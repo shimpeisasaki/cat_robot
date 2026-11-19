@@ -26,3 +26,5 @@ bringupを重ねて起動しない。cat_navigationは基本安全を所有せ�
   受信機起動・座標変換・リセット有効化の区別。各機能の正本への入口。
 - [GNSS実装時のオフライン検証](validation/gnss_reset_20261117.md)、
   [GNSS文書再点検](validation/gnss_docs_review_20261117.md)：日付と対象SHAを持つ別々の記録。
+
+- [JPEG入力移行のオフライン検証](validation/jpeg_input_20261118.md)：撮影・GUI録画preset・RViz。

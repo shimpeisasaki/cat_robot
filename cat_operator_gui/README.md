@@ -45,3 +45,9 @@ colcon test --packages-select cat_operator_gui
 # ハードウェアを起動せず画面だけ確認
 ros2 run cat_operator_gui cat_operator_gui --no-ros
 ```
+
+ライブ画像の受信監視はCompressedImageをReliableで購読します。
+「ZED画像評価」収録presetは`/zed/zed_node/rgb/color/raw/image/compressed`とraw CameraInfoを使います。
+保存済みの独自presetは変更しません。収録開始は画像配信をONにしないため、
+[ZED配信手順](../cat_bringup/README.md)で単一の制御元が配信を管理してください。
+JPEG移行の[オフライン検証](../docs/validation/jpeg_input_20261118.md)では実収録を起動していません。

@@ -9,7 +9,7 @@ import re
 import yaml
 
 
-IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image'
+IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image/compressed'
 MAPPING_TOPICS = ['/scan', '/odom', '/tf', '/tf_static']
 PRESETS = {
     '全トピック': [],

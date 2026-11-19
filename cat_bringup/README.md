@@ -66,6 +66,31 @@ VIO設定では、起動後60秒間odomが出ない場合、または一度出�
 wrapper全体を停止して再起動します。`odom_source` が入力断を検出して停止した場合は、
 ロボットを停止した状態でnavigation全体を再起動してください。
 
+ZED画像は未補正rawをwrapper内でJPEG化した
+`/zed/zed_node/rgb/color/raw/image/compressed`（`sensor_msgs/msg/CompressedImage`）
+だけを配信します。VIO/wheel両設定で `video.raw_jpeg_only=true`、品質90です。
+非圧縮Image・rect画像の配信口は生成しません。
+画像配信は起動・再起動時ともOFFです。VIO/odom、wheel用IMUは
+画像停止中も継続します。wheel構成は不要な深度・位置追跡を無効にしています。
+JPEGの購読・録画にも明示的なON操作が必要です。
+panorama_captureは元JPEGを保存し、GUIの画像録画presetとRVizはcompressed topicを使います。
+D1の録画抽出・評価は[JPEG入力手順](../../d1vision_ros2/docs/JPEG_INPUT_JA.md)を参照してください。
+これらの購読者は画像を自動ONにしません。
+制御元は1つにし、利用終了後はOFFにしてください。SDKのカメラ開始停止ではありません。
+サービス型は暫定的に `d1vision_interfaces` にあります。新しいinstallをsourceして実行します。
+
+```bash
+# 例: 0.2秒周期で未補正rawのJPEG配信を許可（撮影・VIOは継続）
+ros2 service call /zed/zed_node/set_image_stream d1vision_interfaces/srv/SetImageStream \
+  '{enabled: true, period_sec: 0.2}'
+# OFFにも有効な周期が必要
+ros2 service call /zed/zed_node/set_image_stream d1vision_interfaces/srv/SetImageStream \
+  '{enabled: false, period_sec: 0.2}'
+```
+
+周期の上限・拒否条件・OFF応答とDDS到着の関係・ビルド方法は
+[ZED画像配信契約](../../zed-ros2-wrapper/IMAGE_STREAM.md)を参照してください。
+
 ## Livox Horizon 単体起動
 
 公式 [Livox-SDK/livox_ros2_driver](https://github.com/Livox-SDK/livox_ros2_driver)
