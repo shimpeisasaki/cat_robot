@@ -28,12 +28,30 @@ ros2 action send_goal /panorama/capture \
 
 ## 保存先と依存関係
 
-既定の保存先は `~/ros2_ws/data/d1_vision/YYYYMMDD_HHMMSS_角度_枚数/` です。画像時刻に対応する `/odom` の向きから、最初の保存画像を0度とした角度を求め、`f00_000.0deg_rgb.jpg` のようにJPEG品質95で保存します。角度は0.1度単位に丸めます。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
+既定の保存先は `~/ros2_ws/data/d1_vision/YYYYMMDD_HHMMSS_角度_枚数/` です。画像時刻に対応する `/odom` の向きから、最初の保存画像を0度とした角度を求め、`f00_000.0deg_rgb.jpg` のように保存します。JPEG入力の元バイト列を保存し、品質の変更・再圧縮はしません。角度は0.1度単位に丸めます。`panorama.png` は生成しません。保存先の親ディレクトリはlaunch引数 `panorama_output_dir:=/path/to/data` で変更できます。
 
-`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/control_state` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/raw/image` を使用します。ROS依存パッケージは `package.xml` に記載しています。新しいPCでは `cat_robot` を取得し、`rosdep install --from-paths src --ignore-src -r -y` と `colcon build --symlink-install --packages-up-to cat_bringup` で構築できます。
+`panorama_rotate` は `/odom`、`/base/state`、`/base_safety/control_state` を監視し、専用の `/cmd_vel_panorama` を通じて旋回します。`panorama_capture` はZEDの `/zed/zed_node/rgb/color/raw/image/compressed`（CompressedImage、Reliable）を使用します。
+入力はJPEG専用です。`rgb_transport`、旧Image/BGR入力、再圧縮経路は廃止しました。
+ノードの`rgb_topic`パラメータによる明示指定も`CompressedImage`のJPEG topicとして扱います。
+依存・ビルド順は[現行起動手順](../docs/startup.md)を参照してください。
 
 撮影済みの各JPEGのファイル名、画像時刻、画像フレーム、補間した `/odom` 位置と向きは `frames.json` に保存します。探索はこの記録から各画像の撮影位置を復元します。
 
-撮影完了時に `/panorama_capture/status` で保存先を通知します。オンラインの画像判定は保存済みの24枚を読み込みます。このJPEG保存とオンライン連携は実機未検証です。
+撮影完了時に `/panorama_capture/status` で保存先を通知します。旧探索の24枚D1判定への接続は
+現行D1では非対応・保留です。撮影サービス・actionは維持します。JPEG保存はオフライン検証、
+旋回走行と実カメラの統合は実機未検証です。
 
 開始サービスがタイムアウトした場合は遅れて届く応答を追跡し、成立した撮影セッションを取り消します。取り消しが確認されるまでは、新しい撮影要求を受け付けません。
+
+## 画像配信とJPEG入力
+
+撮影用サービス・アクションはCATに残し、旋回制御・安全条件は変更しません。
+ZEDは起動・再起動時に画像OFFなので、撮影前に単一の制御元で配信ONが必要です。
+[CATのZED配信操作](../cat_bringup/README.md)に従い、撮影・購読だけでONになるとは扱わないでください。
+D1管理ノードが画像制御元の場合、別の利用者からON/OFFを重ねないでください。
+
+JPEGは形式・先頭末尾マーカーを検査し、保存時の全画素復号は行いません。
+`frames.json`には従来の撮影時刻・frame・odomに加え、`image_storage: source_jpeg`と
+`image_format`を保存します。録画時のJPEG品質は推測しません。
+既存の撮影データや評価条件は書き換えません。
+移行は[オフライン検証](../docs/validation/jpeg_input_20261118.md)のみで、旋回走行・実カメラは未検証です。

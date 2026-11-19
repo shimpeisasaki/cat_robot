@@ -6,7 +6,6 @@ import math
 from pathlib import Path
 import time
 
-from cv_bridge import CvBridge
 import rclpy
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
@@ -14,7 +13,7 @@ from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from cat_panorama_interfaces.srv import StartCapture
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
@@ -28,8 +27,7 @@ class PanoramaCapture(Node):
         self.output_dir = param('output_dir', str(Path.home() / 'ros2_ws/data/d1_vision'))
         self.input_timeout = float(param('input_timeout', .75))
         self.capture_timeout = float(param('capture_timeout', 10.))
-        rgb_topic = param('rgb_topic', '/zed/zed_node/rgb/color/raw/image')
-        self.bridge = CvBridge()
+        rgb_topic = param('rgb_topic', '/zed/zed_node/rgb/color/raw/image/compressed')
         self.rgb_frames = {}
         self.rgb_at = 0.0
         self.odom_frames = deque(maxlen=150)
@@ -42,7 +40,7 @@ class PanoramaCapture(Node):
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='panorama')
         self.jobs = deque()
         self.cancel_reason = None
-        self.create_subscription(Image, rgb_topic, self.receive_image, qos_profile_sensor_data)
+        self.create_subscription(CompressedImage, rgb_topic, self.receive_image, QoSProfile(depth=1))
         self.create_subscription(Odometry, '/odom', self.receive_odom, qos_profile_sensor_data)
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.status = self.create_publisher(String, '~/status', qos)
@@ -63,6 +61,10 @@ class PanoramaCapture(Node):
         return True
 
     def receive_image(self, msg):
+        encoding = msg.format.lower().split(';')[-1].strip().split()
+        if (not encoding or encoding[0] != 'jpeg' or len(msg.data) < 4 or
+                bytes(msg.data[:2]) != b'\xff\xd8' or bytes(msg.data[-2:]) != b'\xff\xd9'):
+            return
         if self.remember(self.rgb_frames, msg):
             self.rgb_at = time.monotonic()
 
@@ -132,8 +134,8 @@ class PanoramaCapture(Node):
         return response
 
     def save_frame(self, rgb, angle_deg, metadata=None):
-        image = self.bridge.imgmsg_to_cv2(rgb, desired_encoding='bgr8').copy()
-        return self.session.capture(image, angle_deg, metadata)
+        return self.session.capture_jpeg(rgb.data, angle_deg,
+                                         dict(metadata or {}, image_format=rgb.format))
 
     def finish(self, _, response):
         if self.state != 'recording' or self.pending_capture:

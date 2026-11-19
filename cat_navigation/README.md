@@ -8,12 +8,8 @@
 
 ROS 2 Humbleを使用する。リポジトリの取得、依存ソースの導入、デバイス設定は [cat_robotの導入手順](../README.md) を参照する。LiDARドライバとemcl2のソースは `cat_robot/dependencies_lidar.repos` で取得する。
 
-```bash
-cd ~/ros2_ws
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-up-to cat_navigation
-source install/setup.bash
-```
+現在の明示ソース指定・nested interface・fresh build/install順は
+[現行起動手順](../docs/startup.md#前提とビルド)を参照する。
 
 新しい端末ではROS 2とワークスペースの `setup.bash` を再度読み込む。地図YAML、対応する画像、waypoint YAMLは `map/` 内で一緒に管理し、別PCへ展開するときも同じリポジトリの変更として共有する。`map/` に新しい地図を追加した後はビルドを実施し、パッケージ共有ディレクトリへ反映する。
 
@@ -25,7 +21,14 @@ ros2 launch cat_navigation navigation.launch.py
 
 既定は `use_zed:=false odom_source:=wheel` で、車輪オドメトリと2D LiDARを使う。ZEDのVIOを使う場合は `use_zed:=true odom_source:=vio` を指定する。撮影機能は既定で無効で、必要な場合は `enable_panorama:=true` を指定する。
 
-`lidar_source` は `rplidar` のみ。RPLIDARは既定で `RPLIDAR_F`（前方3.19 mm、高さ254.35 mm）を使う。`rplidar_mount:=legacy` は `front` の別名、`custom` は `rplidar_x/y/z/roll/yaw` を指定する。VLP-16・後方RPLiDARの選択は廃止した。取付校正とフィルタの正本は [機体README](../README.md#現行lidarと取付位置)、走行許可・停止・再armは [制御契約](../docs/control.md) を参照する。
+wheel＋IMUには別途新鮮なIMUが必要。ZEDから供給する場合は`use_zed:=true odom_source:=wheel`。
+ZEDなしでは対応する外部IMUとTFを供給しない限り、従来のwheel_only状態となる。
+mapping/navigationは`odom_pose_mode`を公開せず、VIOも平面構成。空間VIOは
+[bringupの入口](../docs/startup.md#オドメトリと起動所有権)を使う。
+両入口とも`gnss_mode`は`off`、`rtk_source`は`cit`、mountは`front`が既定。
+画像は起動時OFFで、撮影有効化や購読だけではONにならない。
+
+`lidar_source` は `rplidar` のみ。RPLIDARは既定で `RPLIDAR_F`（前方3.19 mm、高さ254.35 mm）を使う。旧`rplidar_mount:=legacy`は`front`へ置き換える。`custom` は `rplidar_x/y/z/roll/yaw` を指定する。VLP-16・後方RPLiDARの選択は廃止した。取付校正とフィルタの正本は [機体README](../README.md#現行lidarと取付位置)、走行許可・停止・再armは [制御契約](../docs/control.md) を参照する。
 
 既定では `slam:=false` とし、以下のファイルをパッケージ内の `map/` から読み込む。
 
@@ -115,6 +118,10 @@ ros2 service call /waypoint_editor/save std_srvs/srv/Trigger '{}'
 ros2 launch cat_navigation mapping.launch.py
 ```
 
+mappingは`enable_panorama`を公開せず、下位bringupの既定trueを使用する。
+ZEDが無効なら撮影ノードも起動しない。画像利用とD1なし手動制御の前提は
+[現行画像手順](../docs/startup.md#zed設定と画像のonoff)を参照する。
+
 地図の保存は、ワークスペースを読み込んだ別端末で実行する。
 
 ```bash
@@ -146,7 +153,7 @@ costmapのLiDAR障害物高さ上限はlocal/globalともに0.8 m、スキャン
 | 地図が表示されない | 地図YAMLの `image` と画像ファイル、`map/` のインストール状態 |
 | RVizが起動しない | `navigation_rviz` 引数、起動ログ、画面表示環境 |
 | 巡回が始まらない | `/waypoint_route/start` の応答、`/waypoint_route/status`、`/base_safety/status` |
-| `/scan` の更新警告 | LiDARの接続、`/scan_raw` と `/scan` の配信状態 |
+| `/scan` の更新警告 | LiDARの接続、`/scan` の配信状態と[フィルタ設定](../cat_bringup/README.md#lidar-filter) |
 | 走行許可が解除される | `/navigation/ready`、`/base_safety/status`、モーター診断 |
 
 機体側の通信と停止制御は [cat_robotのREADME](../README.md) を参照する。
@@ -159,3 +166,30 @@ EMCLが `transform_tolerance`（既定0.2秒）を加えて配信する `map -> 
 ## ライセンス
 
 本リポジトリは [Apache License, Version 2.0](../LICENSE)（SPDX識別子: `Apache-2.0`）で提供する。外部依存パッケージには、それぞれのライセンスが適用される。
+
+
+## 要求型GNSS自己位置リセットの接続
+
+保存地図のlocalizationで `use_gnss_reset:=true` と
+`gnss_map_params_file:=/absolute/path/to/calibration.yaml` を明示すると、gnss2mapの
+変換ノードを1個起動し、emcl2の要求受付を有効にする。既定は無効。
+この設定は受信機を起動しない。navigation全体から使う際の受信機選択は従来どおり
+`gnss_mode:=rtk rtk_source:=cit`（またはstandalone）を別途指定する。
+localization単独では `/gnss/fix` と必要なTFを外部から供給する。
+
+変換は `/gnss/fix` → `/gnss/map_pose`、状態はubloxから `/gnss/status`。
+GNSSアンテナframeは既存の `gnss_antenna_link` を使用し、取付校正は変更しない。
+変換側frame_idとemcl2のglobal_frame_idは一致させる。校正は選択したlocalization_mapに
+対応したものを使うこと。過去のgnss2map設定を無検証で現地図へ適用しない。
+
+破綻通知・要求・結果は [emcl2の回復仕様](../../emcl2_ros2/GNSS_RECOVERY.md)、
+変換設定は [gnss2map](../../gnss2map/README.md)、
+受信・品質は [ubloxの出力契約](../../ublox_dgnss/docs/gnss_output_contract.md) が正本。
+取付位置は [URDF](../cat_bringup/urdf/experiment_robot.urdf.xacro) を正本とし、
+emcl2がそのTFを使って平面XYのアンテナ位置差を補正する。
+
+`localization.launch.py` 単独は受信機・走行ノードを起動しないが、
+`navigation.launch.py` はbringupを含む。接続設定の確認だけで実行しない。
+`slam:=true` と `use_gnss_reset:=true` の併用は拒否する。
+リセット要求を送る上位BT、移動、再試行場所選択、通常走行復帰はこの変更に含まれない。
+自己位置回復は走行許可や停止ラッチを解除しない。実機起動は別途明示指示が必要。

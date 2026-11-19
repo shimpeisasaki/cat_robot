@@ -44,6 +44,31 @@ def test_details_use_actual_arguments_and_reject_incompatible_inputs(configurati
         mode_plan(settings, shares)
 
 
+@pytest.mark.parametrize('uses_common', [True, False])
+def test_startup_snapshot_keeps_all_selected_zed_inputs(configuration, tmp_path, uses_common):
+    settings, shares = configuration
+    common = tmp_path / 'common.yaml'
+    common.write_text('/**: {ros__parameters: {video: {jpeg_quality: 81}}}')
+    profile = tmp_path / 'profile.yaml'
+    profile.write_text(('cat_zed_common: common.yaml\n' if uses_common else '') +
+                       '/**: {ros__parameters: {pos_tracking: {pos_tracking_enabled: false}}}')
+    settings.use_zed, settings.zed_yaml = True, str(profile)
+    plan = mode_plan(settings, shares)
+    # No jobs means snapshot data only; no launch, ROS graph or hardware.
+    snapshot = Plan('configuration snapshot', [], plan.sources)
+    manager = ProcessManager(tmp_path / 'logs')
+    manager.start(snapshot)
+    assert Path(snapshot.sources['起動時コピー (ZED YAML)']).read_bytes() == profile.read_bytes()
+    if uses_common:
+        saved = Path(snapshot.sources['起動時コピー (ZED common YAML)'])
+        original = common.read_bytes()
+        common.write_text('/**: {ros__parameters: {video: {jpeg_quality: 90}}}')
+        assert saved.read_bytes() == original
+    else:
+        assert 'ZED common YAML' not in snapshot.sources
+    assert not manager.jobs
+
+
 def test_map_inputs_checked_before_start(configuration, tmp_path):
     settings, shares = configuration
     settings.mode = 'navigation'
@@ -189,3 +214,24 @@ def test_settings_roundtrip_and_offscreen_widgets(configuration, tmp_path):
     finally:
         window.close()
         app.processEvents()
+
+
+def test_live_monitor_subscribes_to_compressed_jpeg_without_starting_ros(monkeypatch):
+    from unittest.mock import Mock
+    from sensor_msgs.msg import CompressedImage
+    from rclpy.qos import ReliabilityPolicy
+    from cat_operator_gui import ros_bridge
+    from cat_operator_gui.plans import IMAGE_TOPIC
+    node = Mock()
+    monkeypatch.setattr(ros_bridge, 'Context', Mock())
+    monkeypatch.setattr(ros_bridge.rclpy, 'init', Mock())
+    monkeypatch.setattr(ros_bridge, 'Node', Mock(return_value=node))
+    monkeypatch.setattr(ros_bridge, 'SingleThreadedExecutor', Mock())
+    monkeypatch.setattr(ros_bridge, 'Thread', Mock())
+    bridge = ros_bridge.RosBridge(domain_id=89)
+    calls = [call.args for call in node.create_subscription.call_args_list
+             if call.args[1] == IMAGE_TOPIC]
+    assert len(calls) == 1
+    assert calls[0][0] is CompressedImage
+    assert calls[0][3].reliability == ReliabilityPolicy.RELIABLE
+    assert bridge.samples == {}

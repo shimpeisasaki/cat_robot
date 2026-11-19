@@ -9,13 +9,13 @@ import re
 import yaml
 
 
-IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image'
+IMAGE_TOPIC = '/zed/zed_node/rgb/color/raw/image/compressed'
 MAPPING_TOPICS = ['/scan', '/odom', '/tf', '/tf_static']
 PRESETS = {
     '全トピック': [],
     '地図作成': MAPPING_TOPICS,
     '走行・ナビゲーション': MAPPING_TOPICS + [
-        '/scan_raw', '/wheel/odom', '/map', '/localization/map', '/joy',
+        '/wheel/odom', '/map', '/localization/map', '/joy',
         '/cmd_vel_safe', '/base/state', '/diagnostics', '/base_safety/control_state',
         '/navigation/ready', '/waypoint_route/status'],
     'ZED画像評価': MAPPING_TOPICS + [IMAGE_TOPIC, '/zed/zed_node/rgb/color/raw/camera_info'],
@@ -221,8 +221,11 @@ def mode_plan(settings, shares, live_domain=0):
     if s.use_zed:
         zed_name = 'zed_vio.yaml' if s.odom_source == 'vio' else 'zed_sensors.yaml'
         zed = s.zed_yaml or str(Path(shares['cat_bringup']) / 'config' / zed_name)
-        args['zed_config'], _ = yaml_file(zed)
+        args['zed_config'], document = yaml_file(zed)
         sources['ZED YAML'] = args['zed_config']
+        if 'cat_zed_common' in document:
+            sources['ZED common YAML'], _ = yaml_file(
+                Path(args['zed_config']).parent / document['cat_zed_common'])
     if s.mode == 'sensors':
         package, launch = 'cat_bringup', 'bringup.launch.py'
         args.update(use_base=str(s.use_base).lower(), use_lidar=str(s.use_lidar).lower(),

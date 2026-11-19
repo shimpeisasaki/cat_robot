@@ -5,10 +5,14 @@
 ```bash
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-up-to cat_operator_gui
-source install/setup.bash
+source install/cat_current/setup.bash
 ros2 run cat_operator_gui cat_operator_gui
 ```
+
+先に[現行起動手順](../docs/startup.md#前提とビルド)の明示ソースbuildを実施します。
+下のGUI起動は画面を開き、運転開始ボタンは実機ノードを起動します。
+GUIはオドメトリ源を選べますが`odom_pose_mode`を公開しません。CLIの空間VIO指定と区別します。
+wheel構成のIMU供給条件と、bringup/mapping/navigationの重複起動禁止は同じです。
 
 「運転・地図」でセンサー・手動操作、オンライン地図作成、ナビゲーション、オフライン地図作成を
 選んで起動します。地図と経路は別ウィンドウのRVizで確認し、初期位置と目的地もRVizで指定します。
@@ -19,6 +23,8 @@ ros2 run cat_operator_gui cat_operator_gui
 各操作の「詳細」は実行に使うコマンドと主要な参照ファイルを表示します。起動後は設定欄を変更しても
 起動中の引数は変わりません。機体の停止・終了時動作は選択した機体YAMLの設定に従います。
 起動時に主要なYAMLのコピーもログに保存し、詳細画面から参照できます。
+ZED profileが共通設定を明示参照する場合は、その共通YAMLも起動時コピーへ含めます。
+既存の独自一枚YAMLへ共通値を追加しません。
 GUI設定は`~/.config/cat_operator_gui/settings.yaml`、実行ログと設定スナップショットは
 `<データ保存先>/gui_sessions/`に保存します。`--settings-file`で設定保存先を変更できます。
 
@@ -45,3 +51,9 @@ colcon test --packages-select cat_operator_gui
 # ハードウェアを起動せず画面だけ確認
 ros2 run cat_operator_gui cat_operator_gui --no-ros
 ```
+
+ライブ画像の受信監視はCompressedImageをReliableで購読します。
+「ZED画像評価」収録presetは`/zed/zed_node/rgb/color/raw/image/compressed`とraw CameraInfoを使います。
+保存済みの独自presetは変更しません。収録開始は画像配信をONにしないため、
+[ZED配信手順](../cat_bringup/README.md)で単一の制御元が配信を管理してください。
+JPEG移行の[オフライン検証](../docs/validation/jpeg_input_20261118.md)では実収録を起動していません。

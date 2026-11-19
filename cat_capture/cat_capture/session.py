@@ -4,9 +4,6 @@ import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import cv2
-
-
 class CaptureSession:
     def __init__(self, output_dir, angle_deg, frames):
         self.capture_angle_deg = angle_deg
@@ -28,21 +25,22 @@ class CaptureSession:
         self.frames = []
         self.metadata = []
 
-    def capture(self, bgr, angle_deg, metadata=None):
+    def capture_jpeg(self, jpeg, angle_deg, metadata=None):
+        """Keep the camera's compressed bytes, without another lossy encode."""
+        blob = bytes(jpeg)
+        if not blob.startswith(b'\xff\xd8') or not blob.endswith(b'\xff\xd9'):
+            raise ValueError('Expected JPEG camera bytes')
         stem = f'f{len(self.frames):02d}'
         rounded_angle = round(angle_deg, 1) % 360
         rgb_path = self.path / f'{stem}_{rounded_angle:05.1f}deg_rgb.jpg'
         try:
-            saved = cv2.imwrite(str(rgb_path), bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            rgb_path.write_bytes(blob)
         except Exception:
             rgb_path.unlink(missing_ok=True)
             raise
-        if not saved:
-            rgb_path.unlink(missing_ok=True)
-            raise OSError(f'Could not save {rgb_path}')
         self.frames.append(rgb_path)
-        if metadata is not None:
-            self.metadata.append(dict(file=rgb_path.name, **metadata))
+        self.metadata.append(dict(file=rgb_path.name, **(metadata or {}),
+                                  image_storage='source_jpeg'))
         return len(self.frames)
 
     def finish(self):

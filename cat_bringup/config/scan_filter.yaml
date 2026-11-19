@@ -1,7 +1,7 @@
-sector_scan_filter:
+sllidar_node:
   ros__parameters:
     # Defaults match base_link -> RPLIDAR_F; launch overrides for custom mounts.
-    scan_frame: RPLIDAR_F
+    sector_filter_enabled: true
     mounting_roll: 0.0
     mounting_yaw: 3.141592653589793
     front_angle_deg: 270.0

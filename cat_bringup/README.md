@@ -33,6 +33,27 @@ unsetしてcolcon testを実施。62件中61件成功、明示opt-inの実機pow
 機体起動・設定・TF・センサ・停止制御の所有元です。
 起動方法、設定一覧、公開トピックは[リポジトリREADME](../README.md)を参照してください。
 
+## 3構成と設定の読み込み
+
+ビルド・起動順・入口ごとの選択方法は[現行起動手順](../docs/startup.md)を正本とします。
+`bringup.launch.py`は`odom_source:=wheel odom_pose_mode:=planar`（wheel＋IMU）、
+`odom_source:=vio odom_pose_mode:=planar`、`odom_source:=vio odom_pose_mode:=spatial`を維持します。
+wheel＋spatialは拒否します。mapping/navigationとGUIは`odom_pose_mode`を公開していません。
+wheelのIMUは`imu_guard`が`/zed/zed_node/imu/data`から受け、[EKF設定](config/ekf.yaml)の
+`/imu/ekf`へ渡します。新鮮なgyroとbase_linkへのTFが必要です。
+`use_zed:=false`だけでは代わりのIMUは生成されません。
+
+`zed_vio.yaml`と`zed_sensors.yaml`はCAT supervisor用profileです。
+`cat_zed_common: zed_common.yaml`はROS/YAMLの暗黙合成ではなく、supervisorが
+profile所在ディレクトリから読み、同じsection内ではprofile値を優先して明示的に合成します。
+共通部はJPEG品質90、672×376、grab30fps、worker上限24Hz、既存の再接続値を保持します。
+supervisorは一枚の一時overrideからtracking有効を判定し、同じfileをwrapperの
+`ros_params_override_path`へ渡します。子process groupの終了まで保持し、その後削除します。
+wrapper固有の共通・camera設定、CAT override、強制launch値の優先順は変わりません。
+このprofileを直接wrapperへ渡さず、CATの`zed_config`から選んでください。
+既存の独自一枚ROS YAMLは`zed_config:=/absolute/path/custom.yaml`で従来どおり使用でき、
+`cat_zed_common`がなければ合成・書き換え・CAT既定値の注入を行いません。
+
 ## GNSS・RTK基準局の切り替え
 
 既存の起動コマンドに **`gnss_mode:=rtk`** を指定すると、受信機と大学CIT局の
@@ -41,15 +62,19 @@ NTRIPクライアントをまとめて起動する。既定は `rtk_source:=cit`
 公開松戸局は `rtk_source:=matsudo` で選択できる。接続先は `geortk.jp:2101/Matsudo`、認証は不要。
 通常の単独測位は `gnss_mode:=standalone`、GNSS無効は `gnss_mode:=off`。
 同じ引数を `cat_navigation` のmapping/navigation launchにも指定できる。
-既定は `off`。従来の `use_gnss:=true` は単独測位として有効で、
-`gnss_mode` を明示した場合はそちらを優先する。切り替えはlaunchの再起動時に適用する。
+既定は `off`。旧`use_gnss:=true`は`gnss_mode:=standalone`、
+旧`use_gnss:=false`は`gnss_mode:=off`へ置き換えます。切り替えはlaunchの再起動時に適用します。
 
 GNSS有効時の測位周期は5 Hz、衛星選別条件は受信機の保存値を使う。
 RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では無効にする。
 既存の `/gnss/fix`・`/gnss/fix_velocity` と `gnss_antenna_link` を使用する。
+受信状況・品質は `/gnss/status`。時刻・有効フラグの解釈は
+[ublox出力契約](../../ublox_dgnss/docs/gnss_output_contract.md) を参照する。
 大学・松戸の各局からの補正受信とオフラインの起動構成は確認済み。
 正常受信中は接続を保持し、切断時は30秒から最大300秒へ間隔を延ばして再接続する。
-RTKの実機起動・Fix・精度は未確認で、GNSSをNav2へ融合する処理も含まない。
+RTKの実機起動・Fix・精度は未確認。受信機起動だけでは自己位置リセットを有効にしない。
+保存地図への変換と要求型リセットの接続は
+[cat_navigationの正本](../cat_navigation/README.md#要求型gnss自己位置リセットの接続) を参照する。
 
 VLP-16・後方RPLiDARの起動・設定・未使用URDFは廃止しました。
 過去の取付値と参照先は [保守記録](../docs/maintenance.md) に残します。
@@ -61,6 +86,33 @@ ZEDは `zed_supervisor` がwrapperとコンテナを同じプロセスグルー�
 VIO設定では、起動後60秒間odomが出ない場合、または一度出たodomが10秒途絶えた場合に
 wrapper全体を停止して再起動します。`odom_source` が入力断を検出して停止した場合は、
 ロボットを停止した状態でnavigation全体を再起動してください。
+
+ZED画像は未補正rawをwrapper内でJPEG化した
+`/zed/zed_node/rgb/color/raw/image/compressed`（`sensor_msgs/msg/CompressedImage`）
+だけを配信します。VIO/wheel両設定で `video.raw_jpeg_only=true`、品質90です。
+非圧縮Image・rect画像の配信口は生成しません。
+画像配信は起動・再起動時ともOFFです。VIO/odom、wheel用IMUは
+画像停止中も継続します。wheel構成は不要な深度・位置追跡を無効にしています。
+JPEGの購読・録画にも明示的なON操作が必要です。
+panorama_captureは元JPEGを保存し、GUIの画像録画presetとRVizはcompressed topicを使います。
+D1の録画抽出・評価は[JPEG入力手順](../../d1vision_ros2/docs/JPEG_INPUT_JA.md)を参照してください。
+これらの購読者は画像を自動ONにしません。
+制御元は1つにし、利用終了後はOFFにしてください。SDKのカメラ開始停止ではありません。
+サービス型の所有元は `d1vision_interfaces` です。新しいinstallをsourceして実行します。
+D1を使う場合の唯一の制御元は[D1 manager](../../d1vision_ros2/docs/CONTINUOUS_D1_JA.md)です。
+下記の手動操作はD1を使わない撮影・録画時に、単一clientから行います。
+
+```bash
+# 例: 0.2秒周期で未補正rawのJPEG配信を許可（撮影・VIOは継続）
+ros2 service call /zed/zed_node/set_image_stream d1vision_interfaces/srv/SetImageStream \
+  '{enabled: true, period_sec: 0.2}'
+# OFFにも有効な周期が必要
+ros2 service call /zed/zed_node/set_image_stream d1vision_interfaces/srv/SetImageStream \
+  '{enabled: false, period_sec: 0.2}'
+```
+
+周期の上限・拒否条件・OFF応答とDDS到着の関係・ビルド方法は
+[ZED画像配信契約](../../zed-ros2-wrapper/IMAGE_STREAM.md)を参照してください。
 
 ## Livox Horizon 単体起動
 
@@ -132,7 +184,7 @@ Horizon単体launchはセンサードライバ、IMU補正、任意のRVizを起
 
 ```bash
 ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=false \
-  use_gnss:=false use_lidar:=true lidar_source:=horizon \
+  gnss_mode:=off use_lidar:=true lidar_source:=horizon \
   enable_joystick:=false enable_panorama:=false rviz:=true
 ```
 
@@ -193,3 +245,26 @@ Ctrl+C正常終了を確認し、対象機未接続で受信待ち中の正常�
 CAT_TEST_HORIZON=1 PYTHONNOUSERSITE=1 python3 -m pytest -q \
   src/cat_robot/cat_bringup/test/test_horizon_power.py
 ```
+
+<a id="lidar-filter"></a>
+
+## LiDARフィルタ
+
+RPLiDARは`sllidar_ros2`のC++内でマスクし、`/scan`を直接配信する。
+旧Python `sector_scan_filter`と`/scan_raw`へのリマップは廃止した。
+機体設定は[config/scan_filter.yaml](config/scan_filter.yaml)の
+`sllidar_node.ros__parameters`に置く。`sector_filter_enabled`はCATではtrue、
+ドライバ単体ではfalse。変更は起動時に適用され、実行中の設定変更は行わない。
+
+距離・角度設定と座標式は[ドライバ契約](../../sllidar_ros2/README.md#optional-vehicle-sector-filter)を参照。
+frontはroll=0/yaw=pi、後方90度をNaN、前方270度は0.2 m未満をNaNとする。
+customは取付roll/yawを引き継ぎ、全周0.2 m未満をNaN、死角除外は0度。
+取付値はlaunch引数でYAMLを上書きし、rear最小距離と死角もframeに応じて上書きする。
+`mounting_roll`/`mounting_yaw`は車体方向の判定だけに使い、配信座標・TFは変えない。
+
+通常のbringupは`rplidar_filter_config`で別YAMLを指定できる。
+内部の`rplidar_s1.launch.py`では同じ引数を`filter_config`と呼ぶ。
+フィルタ前の測距が必要な校正では、YAMLのコピーで
+`sector_filter_enabled: false`にして指定する。走行時の通常設定は有効のまま使う。
+校正の手順は[robot_sensor_tests](../../robot_sensor_tests/README.md#rplidarの前後位置だけを校正する)を参照。
+過去の`/scan_raw`を含むbag・校正記録は当時のまま保持する。

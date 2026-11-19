@@ -13,7 +13,7 @@ from launch_ros.substitutions import FindPackageShare
 def rplidar_mount_value(argument, front):
     return PythonExpression([
         "'", front, "' if '", LaunchConfiguration('rplidar_mount'),
-        "' in ('front', 'legacy') else '", LaunchConfiguration(argument), "'"])
+        "' == 'front' else '", LaunchConfiguration(argument), "'"])
 
 
 def generate_launch_description():
@@ -25,23 +25,23 @@ def generate_launch_description():
     rplidar_yaw = rplidar_mount_value('rplidar_yaw', '3.141592653589793')
     rplidar_frame = PythonExpression([
         "'RPLIDAR_F' if '", LaunchConfiguration('rplidar_mount'),
-        "' in ('front', 'legacy') else 'RPLIDAR_custom'"])
+        "' == 'front' else 'RPLIDAR_custom'"])
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
         DeclareLaunchArgument('odom_pose_mode', default_value='planar', choices=['planar', 'spatial']),
-        DeclareLaunchArgument('use_gnss', default_value='false', choices=['true', 'false']),
-        DeclareLaunchArgument('gnss_mode', default_value=PythonExpression([
-            "'standalone' if '", LaunchConfiguration('use_gnss'), "' == 'true' else 'off'"]),
+        DeclareLaunchArgument('gnss_mode', default_value='off',
             choices=['off', 'standalone', 'rtk'],
             description='GNSS mode; rtk uses the selected correction source (CIT by default)'),
         DeclareLaunchArgument('rtk_source', default_value='cit', choices=['cit', 'matsudo']),
         DeclareLaunchArgument('gnss_serial', default_value=''),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
         DeclareLaunchArgument('rplidar_mount', default_value='front',
-                              choices=['front', 'custom', 'legacy']),
+                              choices=['front', 'custom']),
         DeclareLaunchArgument('rplidar_front_blind_rear_angle_deg', default_value='90.0'),
+        DeclareLaunchArgument('rplidar_filter_config', default_value=PathJoinSubstitution([
+            share, 'config', 'scan_filter.yaml'])),
         DeclareLaunchArgument('rplidar_x', default_value='0.00319'),
         DeclareLaunchArgument('rplidar_y', default_value='0'),
         DeclareLaunchArgument('rplidar_z', default_value='0.25435'),
@@ -143,6 +143,7 @@ def generate_launch_description():
             launch_arguments={'serial_port': LaunchConfiguration('serial_port'),
                               'frame_id': rplidar_frame,
                               'front_blind_rear_angle_deg': LaunchConfiguration('rplidar_front_blind_rear_angle_deg'),
+                              'filter_config': LaunchConfiguration('rplidar_filter_config'),
                               'mounting_roll': rplidar_roll,
                               'mounting_yaw': rplidar_yaw}.items()),
         IncludeLaunchDescription(

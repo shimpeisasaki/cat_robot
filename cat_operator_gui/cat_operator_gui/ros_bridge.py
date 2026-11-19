@@ -16,7 +16,7 @@ from rclpy.signals import SignalHandlerOptions
 from cat_control_interfaces.msg import ControlState
 from nav_msgs.msg import OccupancyGrid, Odometry
 from rosbag2_interfaces.srv import Pause, Resume, SetRate, IsPaused
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import CompressedImage, LaserScan
 from std_msgs.msg import Bool, UInt8, String
 from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
@@ -54,7 +54,7 @@ class RosBridge(QObject):
                          ('/tf', TFMessage, volatile), ('/tf_static', TFMessage, retained),
                          ('/map', OccupancyGrid, retained)]
         if not offline:
-            subscriptions += [(IMAGE_TOPIC, Image, volatile), ('/base/state', UInt8, volatile),
+            subscriptions += [(IMAGE_TOPIC, CompressedImage, QoSProfile(depth=1)), ('/base/state', UInt8, volatile),
                               ('/navigation/ready', Bool, volatile),
                               ('/base_safety/control_state', ControlState, retained),
                               ('/waypoint_route/status', String, retained)]
