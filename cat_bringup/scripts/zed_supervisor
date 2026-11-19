@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Own ZED launch descendants and recover VIO only after stopping all of them."""
 import argparse
+from contextlib import contextmanager
 import fcntl
 import os
+from pathlib import Path
 import signal
 import subprocess
+from tempfile import TemporaryDirectory
 import time
+from typing import Iterator
 
 
 def group_alive(pgid):
@@ -37,23 +41,49 @@ def stop_group(process):
     process.poll()
 
 
+@contextmanager
+def resolved_config(path: str) -> Iterator[str]:
+    """Expand a CAT common/profile pair into one override for the child's lifetime."""
+    import yaml
+    profile = Path(path)
+    config = yaml.safe_load(profile.read_text(encoding='utf-8'))
+    common = config.pop('cat_zed_common', None)
+    if common is None:
+        # Existing standalone custom ROS files keep their exact path and contents.
+        yield path
+        return
+    merged = yaml.safe_load((profile.parent / common).read_text(encoding='utf-8'))
+    parameters = merged['/**']['ros__parameters']
+    for section, values in config['/**']['ros__parameters'].items():
+        parameters.setdefault(section, {}).update(values)
+    with TemporaryDirectory(prefix='cat-zed-config-') as directory:
+        effective = Path(directory) / 'override.yaml'
+        effective.write_text(yaml.safe_dump(merged), encoding='utf-8')
+        yield str(effective)
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--serial-number', required=True)
+    parser.add_argument('--config', required=True)
+    args, ros_args = parser.parse_known_args()
+    with resolved_config(args.config) as config_path:
+        return supervise(args.serial_number, config_path, ros_args)
+
+
+def supervise(serial_number: str, config_path: str, ros_args: list[str]) -> int:
     import rclpy
     import yaml
     from nav_msgs.msg import Odometry
     from rclpy.qos import qos_profile_sensor_data
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--serial-number', required=True)
-    parser.add_argument('--config', required=True)
-    args, ros_args = parser.parse_known_args()
-    with open(args.config, encoding='utf-8') as stream:
+    with open(config_path, encoding='utf-8') as stream:
         config = yaml.safe_load(stream)
     # CAT override files use the wildcard node key.
     vio = config.get('/**', {}).get('ros__parameters', {}).get(
         'pos_tracking', {}).get('pos_tracking_enabled', False)
     # Lock before discovery/spawn so simultaneous CAT launches cannot race.
-    lock_path = f'/tmp/cat-zed-{os.getuid()}-{args.serial_number}.lock'
+    lock_path = f'/tmp/cat-zed-{os.getuid()}-{serial_number}.lock'
     with open(lock_path, 'a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -94,11 +124,11 @@ def main():
                 return 2
             command = ['ros2', 'launch', 'zed_wrapper', 'zed_camera.launch.py',
                        'camera_model:=zedm', 'camera_name:=zed', 'node_name:=zed_node',
-                       f'serial_number:={args.serial_number}',
+                       f'serial_number:={serial_number}',
                        'publish_urdf:=false', 'publish_tf:=false',
                        'publish_map_tf:=false', 'publish_imu_tf:=true',
                        'enable_gnss:=false', 'enable_ipc:=false', 'use_sim_time:=false',
-                       f'ros_params_override_path:={args.config}']
+                       f'ros_params_override_path:={config_path}']
             process = subprocess.Popen(command, start_new_session=True)
             started = time.monotonic()
             while not stopping:

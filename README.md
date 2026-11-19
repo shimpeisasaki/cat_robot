@@ -4,6 +4,8 @@
 
 7パッケージの責務と資料の正本は [資料索引](docs/README.md)、
 外部指令・手動の走行許可・停止・再armは [制御契約](docs/control.md) を参照する。
+現在のビルド対象、3オドメトリの起動入口、ZED画像制御、廃止引数の移行は
+[現行起動手順](docs/startup.md)を正本とする。
 ハードウェア起動と走行操作は、その都度明示的な実機操作の許可がある場合だけ実施する。
 
 ## 新規PCへの導入
@@ -18,11 +20,13 @@ cd ~/ros2_ws
 vcs import src < src/cat_robot/dependencies_lidar.repos
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install --packages-up-to cat_navigation
-source install/setup.bash
+# 次にdocs/startup.mdの明示ソース指定でbuildし、そのinstallをsourceする。
 ```
 
-`dependencies_lidar.repos` はLiDARドライバとemcl2だけを取得する。ZEDやGNSSも使用する場合は、これに代えて `dependencies.repos` を使い、ZED SDKも用意する。その場合は `colcon build --symlink-install --packages-up-to cat_navigation zed_wrapper ublox_dgnss` で任意のセンサ用パッケージもビルドする。Nav2とslam_toolboxはROS 2 Humbleの依存パッケージとして導入する。各端末でROSコマンドを使用する前に、ROS 2とワークスペースの `setup.bash` を読み込む。
+`dependencies_lidar.repos` はLiDARドライバとemcl2だけを取得する。ZEDやGNSSも使用する場合は
+`dependencies.repos`の対象とZED SDK・CUDAも用意する。現行wrapperにはnested
+`d1vision_interfaces`も必要なので、[現行ビルド対象](docs/startup.md#前提とビルド)を使用する。
+Nav2とslam_toolboxはHumbleの依存として用意する。機器・依存導入は今回の検証では実施していない。
 
 ## 機器と接続の確認
 
@@ -62,9 +66,8 @@ ros2 launch cat_bringup bringup.launch.py
 | `odom_source` | `vio` | `vio` または `wheel`。`wheel` は車輪・IMUの推定値を使用 |
 | `gnss_mode` | `off` | `off`：無効、`standalone`：単独測位、`rtk`：選択した基準局でRTK（既定は大学CIT） |
 | `rtk_source` | `cit` | `cit`：大学内、`matsudo`：公開松戸局 |
-| `use_gnss` | `false` | 従来互換。`true`で単独測位。明示した`gnss_mode`を優先 |
 | `serial_port` | `/dev/rplidar` | RPLIDARのシリアルポート |
-| `rplidar_mount` | `front` | 現在位置 `RPLIDAR_F`。`legacy` は `front` の別名。`custom` は `rplidar_x/y/z/roll/yaw`（m、rad） |
+| `rplidar_mount` | `front` | 現在位置 `RPLIDAR_F`。`custom` は `rplidar_x/y/z/roll/yaw`（m、rad） |
 | `serial_number` | `10028118` | ZEDのシリアル番号 |
 | `enable_joystick`, `rviz` | `true` | 操作入力と表示 |
 | `enable_panorama` | `true` | 24方向のRGB画像を保存する撮影アクション。画像合成は行わない |
@@ -87,7 +90,7 @@ roll=0、yaw=180°である。現URDFと
 VLP-16と後方RPLiDARの起動・機種選択・設定・専用依存は廃止した。
 旧取付値、由来と履歴の参照先は [保守記録](docs/maintenance.md) に残す。
 
-`RPLIDAR_F`（`rplidar_mount:=front|legacy`）の近距離除外は車体前方側270°を
+`RPLIDAR_F`（`rplidar_mount:=front`）の近距離除外は車体前方側270°を
 0.2 m未満、後方側90°を0.6 m未満とする。距離はLiDAR原点基準。
 `custom` は全周0.2 m未満とする。これはソフトウェアのマスク値であり、
 センサの近距離測定能力を保証する値ではない。
@@ -127,7 +130,7 @@ ros2 run cat_bringup robot_control brake
 | `/wheel_odom` | 車輪・IMU EKFによる推定値 |
 | `/odom` | 選択した推定値。`odom → base_link` のTFも配信 |
 | `/scan`、`/scan_raw` | フィルタ後のLiDAR、フィルタ前のLiDAR |
-| `/zed/zed_node/rgb/color/raw/image` | ZEDの未補正RGB画像。内部取得は30 fps、配信目標上限は24 Hz。実際の受信周期は処理負荷で変動する。深度画像・点群の配信は無効 |
+| `/zed/zed_node/rgb/color/raw/image/compressed` | `sensor_msgs/msg/CompressedImage`、未補正JPEG、品質90・672×376。起動時OFF、grab30fps・worker上限24Hz。実測周期は負荷で変動。VIO/IMUとは独立 |
 | `/base/state`、`/diagnostics` | モーター状態、電流・温度・異常の診断 |
 | `/cmd_vel_external`、`/cmd_vel_teleop`、`/cmd_vel_panorama` | 外部走行指令、平滑化済み手動指令、撮影旋回指令 |
 | `/cmd_vel_safe`、`/base_safety/mode` | 安全制御後の指令、ドライバへの動作許可 |

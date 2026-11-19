@@ -33,6 +33,27 @@ unsetしてcolcon testを実施。62件中61件成功、明示opt-inの実機pow
 機体起動・設定・TF・センサ・停止制御の所有元です。
 起動方法、設定一覧、公開トピックは[リポジトリREADME](../README.md)を参照してください。
 
+## 3構成と設定の読み込み
+
+ビルド・起動順・入口ごとの選択方法は[現行起動手順](../docs/startup.md)を正本とします。
+`bringup.launch.py`は`odom_source:=wheel odom_pose_mode:=planar`（wheel＋IMU）、
+`odom_source:=vio odom_pose_mode:=planar`、`odom_source:=vio odom_pose_mode:=spatial`を維持します。
+wheel＋spatialは拒否します。mapping/navigationとGUIは`odom_pose_mode`を公開していません。
+wheelのIMUは`imu_guard`が`/zed/zed_node/imu/data`から受け、[EKF設定](config/ekf.yaml)の
+`/imu/ekf`へ渡します。新鮮なgyroとbase_linkへのTFが必要です。
+`use_zed:=false`だけでは代わりのIMUは生成されません。
+
+`zed_vio.yaml`と`zed_sensors.yaml`はCAT supervisor用profileです。
+`cat_zed_common: zed_common.yaml`はROS/YAMLの暗黙合成ではなく、supervisorが
+profile所在ディレクトリから読み、同じsection内ではprofile値を優先して明示的に合成します。
+共通部はJPEG品質90、672×376、grab30fps、worker上限24Hz、既存の再接続値を保持します。
+supervisorは一枚の一時overrideからtracking有効を判定し、同じfileをwrapperの
+`ros_params_override_path`へ渡します。子process groupの終了まで保持し、その後削除します。
+wrapper固有の共通・camera設定、CAT override、強制launch値の優先順は変わりません。
+このprofileを直接wrapperへ渡さず、CATの`zed_config`から選んでください。
+既存の独自一枚ROS YAMLは`zed_config:=/absolute/path/custom.yaml`で従来どおり使用でき、
+`cat_zed_common`がなければ合成・書き換え・CAT既定値の注入を行いません。
+
 ## GNSS・RTK基準局の切り替え
 
 既存の起動コマンドに **`gnss_mode:=rtk`** を指定すると、受信機と大学CIT局の
@@ -41,8 +62,8 @@ NTRIPクライアントをまとめて起動する。既定は `rtk_source:=cit`
 公開松戸局は `rtk_source:=matsudo` で選択できる。接続先は `geortk.jp:2101/Matsudo`、認証は不要。
 通常の単独測位は `gnss_mode:=standalone`、GNSS無効は `gnss_mode:=off`。
 同じ引数を `cat_navigation` のmapping/navigation launchにも指定できる。
-既定は `off`。従来の `use_gnss:=true` は単独測位として有効で、
-`gnss_mode` を明示した場合はそちらを優先する。切り替えはlaunchの再起動時に適用する。
+既定は `off`。旧`use_gnss:=true`は`gnss_mode:=standalone`、
+旧`use_gnss:=false`は`gnss_mode:=off`へ置き換えます。切り替えはlaunchの再起動時に適用します。
 
 GNSS有効時の測位周期は5 Hz、衛星選別条件は受信機の保存値を使う。
 RTKではROSのRTCM転送とUSB RTCM3入力を有効にし、単独測位では無効にする。
@@ -77,7 +98,9 @@ panorama_captureは元JPEGを保存し、GUIの画像録画presetとRVizはcompr
 D1の録画抽出・評価は[JPEG入力手順](../../d1vision_ros2/docs/JPEG_INPUT_JA.md)を参照してください。
 これらの購読者は画像を自動ONにしません。
 制御元は1つにし、利用終了後はOFFにしてください。SDKのカメラ開始停止ではありません。
-サービス型は暫定的に `d1vision_interfaces` にあります。新しいinstallをsourceして実行します。
+サービス型の所有元は `d1vision_interfaces` です。新しいinstallをsourceして実行します。
+D1を使う場合の唯一の制御元は[D1 manager](../../d1vision_ros2/docs/CONTINUOUS_D1_JA.md)です。
+下記の手動操作はD1を使わない撮影・録画時に、単一clientから行います。
 
 ```bash
 # 例: 0.2秒周期で未補正rawのJPEG配信を許可（撮影・VIOは継続）
@@ -161,7 +184,7 @@ Horizon単体launchはセンサードライバ、IMU補正、任意のRVizを起
 
 ```bash
 ros2 launch cat_bringup bringup.launch.py use_base:=false use_zed:=false \
-  use_gnss:=false use_lidar:=true lidar_source:=horizon \
+  gnss_mode:=off use_lidar:=true lidar_source:=horizon \
   enable_joystick:=false enable_panorama:=false rviz:=true
 ```
 

@@ -66,6 +66,14 @@ def test_recovery_capture_completion_does_not_brake():
     node.complete_goal.assert_called_once_with('success', 'Panorama frames saved')
 
 
+def test_normal_capture_completion_requests_brake_before_result():
+    node = SimpleNamespace(recovery_observation=False, zero=Mock(), complete_goal=Mock())
+    PanoramaRotate.finish_and_brake(node)
+    assert node.state == 'brake_request' and node.outcome == 'success'
+    assert not node.session_active
+    node.complete_goal.assert_not_called()
+
+
 def test_late_start_cleanup_can_retry_after_transport_failure():
     start, cleanup = Future(), Future()
     start.set_result(SimpleNamespace(success=True))

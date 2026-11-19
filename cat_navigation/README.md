@@ -8,12 +8,8 @@
 
 ROS 2 Humbleを使用する。リポジトリの取得、依存ソースの導入、デバイス設定は [cat_robotの導入手順](../README.md) を参照する。LiDARドライバとemcl2のソースは `cat_robot/dependencies_lidar.repos` で取得する。
 
-```bash
-cd ~/ros2_ws
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-up-to cat_navigation
-source install/setup.bash
-```
+現在の明示ソース指定・nested interface・fresh build/install順は
+[現行起動手順](../docs/startup.md#前提とビルド)を参照する。
 
 新しい端末ではROS 2とワークスペースの `setup.bash` を再度読み込む。地図YAML、対応する画像、waypoint YAMLは `map/` 内で一緒に管理し、別PCへ展開するときも同じリポジトリの変更として共有する。`map/` に新しい地図を追加した後はビルドを実施し、パッケージ共有ディレクトリへ反映する。
 
@@ -25,7 +21,14 @@ ros2 launch cat_navigation navigation.launch.py
 
 既定は `use_zed:=false odom_source:=wheel` で、車輪オドメトリと2D LiDARを使う。ZEDのVIOを使う場合は `use_zed:=true odom_source:=vio` を指定する。撮影機能は既定で無効で、必要な場合は `enable_panorama:=true` を指定する。
 
-`lidar_source` は `rplidar` のみ。RPLIDARは既定で `RPLIDAR_F`（前方3.19 mm、高さ254.35 mm）を使う。`rplidar_mount:=legacy` は `front` の別名、`custom` は `rplidar_x/y/z/roll/yaw` を指定する。VLP-16・後方RPLiDARの選択は廃止した。取付校正とフィルタの正本は [機体README](../README.md#現行lidarと取付位置)、走行許可・停止・再armは [制御契約](../docs/control.md) を参照する。
+wheel＋IMUには別途新鮮なIMUが必要。ZEDから供給する場合は`use_zed:=true odom_source:=wheel`。
+ZEDなしでは対応する外部IMUとTFを供給しない限り、従来のwheel_only状態となる。
+mapping/navigationは`odom_pose_mode`を公開せず、VIOも平面構成。空間VIOは
+[bringupの入口](../docs/startup.md#オドメトリと起動所有権)を使う。
+両入口とも`gnss_mode`は`off`、`rtk_source`は`cit`、mountは`front`が既定。
+画像は起動時OFFで、撮影有効化や購読だけではONにならない。
+
+`lidar_source` は `rplidar` のみ。RPLIDARは既定で `RPLIDAR_F`（前方3.19 mm、高さ254.35 mm）を使う。旧`rplidar_mount:=legacy`は`front`へ置き換える。`custom` は `rplidar_x/y/z/roll/yaw` を指定する。VLP-16・後方RPLiDARの選択は廃止した。取付校正とフィルタの正本は [機体README](../README.md#現行lidarと取付位置)、走行許可・停止・再armは [制御契約](../docs/control.md) を参照する。
 
 既定では `slam:=false` とし、以下のファイルをパッケージ内の `map/` から読み込む。
 
@@ -114,6 +117,10 @@ ros2 service call /waypoint_editor/save std_srvs/srv/Trigger '{}'
 ```bash
 ros2 launch cat_navigation mapping.launch.py
 ```
+
+mappingは`enable_panorama`を公開せず、下位bringupの既定trueを使用する。
+ZEDが無効なら撮影ノードも起動しない。画像利用とD1なし手動制御の前提は
+[現行画像手順](../docs/startup.md#zed設定と画像のonoff)を参照する。
 
 地図の保存は、ワークスペースを読み込んだ別端末で実行する。
 

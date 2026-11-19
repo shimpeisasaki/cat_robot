@@ -1,4 +1,5 @@
 import json
+import cv2
 import numpy as np
 
 from cat_capture.session import CaptureSession
@@ -6,8 +7,10 @@ from cat_capture.session import CaptureSession
 
 def test_capture_session_writes_source_metadata(tmp_path):
     session = CaptureSession(tmp_path, 360, 24)
-    session.capture(np.zeros((4, 4, 3), dtype=np.uint8), 15.,
-                    dict(stamp=123.5, frame='camera', odom_pose=[1., 2., .3]))
+    ok, jpeg = cv2.imencode('.jpg', np.zeros((4, 4, 3), dtype=np.uint8))
+    assert ok
+    session.capture_jpeg(jpeg.tobytes(), 15.,
+                         dict(stamp=123.5, frame='camera', odom_pose=[1., 2., .3]))
     session.finish()
     rows = json.loads((session.path/'frames.json').read_text())
     assert len(rows) == 1

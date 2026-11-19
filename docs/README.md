@@ -1,6 +1,8 @@
 # cat_robot 資料索引と責務
 
 起動・接続・設定の入口は [README](../README.md)。7パッケージの境界は以下とする。
+現在の明示ソースbuild、wheel＋IMU／平面VIO／空間VIO、画像ON/OFFと廃止引数は
+[現行起動手順](startup.md)。CAT画像入力はJPEG `CompressedImage`専用である。
 
 | パッケージ | 所有する責務 | 正本・設定 |
 | --- | --- | --- |
@@ -28,3 +30,4 @@ bringupを重ねて起動しない。cat_navigationは基本安全を所有せ�
   [GNSS文書再点検](validation/gnss_docs_review_20261117.md)：日付と対象SHAを持つ別々の記録。
 
 - [JPEG入力移行のオフライン検証](validation/jpeg_input_20261118.md)：撮影・GUI録画preset・RViz。
+- [CAT/ZED整理の変更前後検証](validation/cat_zed_refactor_20261119.md)：fresh installと保持契約。
